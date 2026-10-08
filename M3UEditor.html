@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M3U 编辑器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230d1117'/%3E%3Cpath d='M6 8.5 15 12l-9 3.5z' fill='%232dd4bf'/%3E%3Ccircle cx='18' cy='7' r='1.6' fill='%232dd4bf'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0d1117; --bg2:#0a0e13; --surface:#161b22; --surface2:#1c232d;
+  --border:#232b36; --border2:#2e3a49;
+  --text:#e6edf3; --muted:#8b949e; --faint:#6a737d;
+  --accent:#2dd4bf; --accent-dim:rgba(45,212,191,.14);
+  --danger:#f85149; --danger-dim:rgba(248,81,73,.12);
+  --warn:#d29922; --ok:#3fb950;
+  --radius:10px; --radius-s:6px;
+  --mono:"Cascadia Code",Consolas,"JetBrains Mono","SFMono-Regular",Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,"Noto Sans SC",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);background:var(--bg);color:var(--text);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  font-size:14px;line-height:1.5;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;color:var(--text);background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-s);padding:6px 9px;font-size:13px;outline:none;transition:border-color .12s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+::placeholder{color:var(--faint)}
+
+/* ===== 顶部栏 ===== */
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:10px 16px;
+  background:linear-gradient(180deg,var(--surface),var(--bg));
+  border-bottom:1px solid var(--border);flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand svg{flex:none}
+.brand h1{font-size:16px;font-weight:700;letter-spacing:.2px}
+.brand .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:var(--radius-s);
+  background:var(--surface2);border:1px solid var(--border2);color:var(--text);
+  font-size:13px;font-weight:500;transition:background .12s,border-color .12s,transform .05s;white-space:nowrap;
+}
+.btn:hover{background:#232c3a;border-color:#3a4a5f}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#06211d;border-color:var(--accent);font-weight:600}
+.btn.primary:hover{background:#5ce0cd;border-color:#5ce0cd}
+.btn.ghost{background:transparent}
+.btn svg{flex:none}
+.btn.danger:hover{background:var(--danger-dim);border-color:var(--danger);color:#ff8a84}
+.sep{width:1px;height:22px;background:var(--border2);margin:0 2px}
+
+/* ===== 工具栏 ===== */
+.toolbar{
+  display:flex;align-items:center;gap:12px;padding:10px 16px;
+  border-bottom:1px solid var(--border);background:var(--bg2);flex-wrap:wrap;
+}
+.searchwrap{position:relative;flex:1;min-width:180px;max-width:420px}
+.searchwrap svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none}
+.searchwrap input{padding-left:32px;width:100%}
+.stat{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.stat b{color:var(--text);font-weight:600}
+.pill{background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:1px 9px;font-size:11.5px}
+.pill.accent{color:var(--accent);border-color:rgba(45,212,191,.4);background:var(--accent-dim)}
+.fname{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.fname input{width:150px;padding:5px 8px;font-size:12.5px}
+.unsaved{width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 6px var(--warn);flex:none}
+.unsaved.hidden{visibility:hidden}
+
+/* ===== URL 加载条 ===== */
+.urlbar{
+  display:flex;align-items:center;gap:10px;padding:9px 16px;
+  border-bottom:1px solid var(--border);background:var(--bg2);color:var(--accent);flex-wrap:wrap;
+}
+.urlbar svg{flex:none}
+.urlbar input{flex:1;min-width:200px}
+.urlHint{font-size:12px;color:var(--muted);line-height:1.5}
+
+/* ===== 主区 ===== */
+.main{flex:1;display:flex;min-height:0}
+.sidebar{
+  width:248px;flex:none;border-right:1px solid var(--border);background:var(--bg2);
+  overflow-y:auto;padding:10px 8px;
+}
+.side-head{display:flex;justify-content:space-between;align-items:center;padding:4px 8px 8px;font-size:11px;letter-spacing:.08em;color:var(--faint);font-weight:600}
+.grp{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--radius-s);cursor:pointer;font-size:13px;color:var(--muted);transition:background .1s}
+.grp:hover{background:var(--surface)}
+.grp.active{background:var(--accent-dim);color:var(--accent)}
+.grp .gname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp .cnt{font-size:11px;color:var(--faint);background:var(--surface);border-radius:999px;padding:0 8px}
+.grp.active .cnt{color:var(--accent);background:rgba(45,212,191,.14)}
+.grp .caret{font-size:10px;color:var(--faint);transition:transform .12s}
+.grp.collapsed .caret{transform:rotate(-90deg)}
+
+.content{flex:1;display:flex;flex-direction:column;min-width:0}
+.tablewrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+thead th{
+  position:sticky;top:0;background:var(--bg);z-index:2;text-align:left;
+  font-size:11.5px;letter-spacing:.05em;color:var(--faint);font-weight:600;
+  padding:8px 10px;border-bottom:1px solid var(--border);
+}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody tr:hover{background:rgba(45,212,191,.04)}
+td{padding:5px 8px;vertical-align:middle}
+td input{width:100%;background:transparent;border-color:transparent;padding:5px 6px}
+td input:hover{border-color:var(--border)}
+td input:focus{background:var(--bg2);border-color:var(--accent)}
+td select{width:100%;padding:5px 6px}
+.grp .g-rename{opacity:0;width:22px;height:22px;flex:none;margin-right:2px}
+.grp:hover .g-rename,.grp.active .g-rename{opacity:1}
+.logo-cell{width:52px}
+.logo{width:44px;height:28px;object-fit:contain;border-radius:4px;background:var(--surface);border:1px solid var(--border);display:block}
+.logo.err{opacity:.5}
+.nm-cell{width:26%}
+.grp-cell{width:22%}
+.url-cell{width:auto}
+.url-cell input{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.act-cell{width:148px;text-align:right;white-space:nowrap}
+.act{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;border-radius:5px;color:var(--muted);transition:background .1s,color .1s;vertical-align:middle}
+.act:hover{background:var(--surface2);color:var(--text)}
+.act.del:hover{background:var(--danger-dim);color:var(--danger)}
+.act svg{width:15px;height:15px}
+.rownum{width:46px;color:var(--faint);font-size:11px;text-align:right;font-family:var(--mono)}
+
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+.empty svg{width:52px;height:52px;opacity:.35;margin-bottom:14px}
+.empty h3{color:var(--text);font-size:15px;margin-bottom:6px}
+.empty p{font-size:13px;max-width:420px;margin:0 auto 16px}
+
+.pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;padding:9px 14px;border-top:1px solid var(--border);background:var(--bg2);font-size:12.5px;color:var(--muted)}
+.pager .btn{padding:4px 10px;font-size:12px}
+
+/* ===== 底部状态栏 ===== */
+.statusbar{
+  display:flex;align-items:center;gap:14px;padding:7px 16px;border-top:1px solid var(--border);
+  background:var(--bg2);font-size:12px;color:var(--muted);flex-wrap:wrap;
+}
+.sb-left{display:flex;align-items:center;gap:10px}
+.sb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.savepath{display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:12px}
+.savepath svg{width:13px;height:13px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.gray{background:var(--faint)}
+.dot.teal{background:var(--accent);box-shadow:0 0 5px var(--accent)}
+
+/* ===== 弹窗 ===== */
+.modal-mask{position:fixed;inset:0;background:rgba(5,8,12,.66);display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(2px)}
+.modal-mask.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:520px;max-width:94vw;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:15px}
+.modal-body{padding:16px 18px;display:grid;gap:13px}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500}
+.field input,.field textarea,.field select{width:100%}
+.field textarea{font-family:var(--mono);font-size:11.5px;min-height:64px;resize:vertical}
+.field .hint{font-size:11px;color:var(--faint);margin-top:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;border-top:1px solid var(--border)}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#1c232d;border:1px solid var(--border2);color:var(--text);padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:all .25s;z-index:100;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:80vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:rgba(63,185,80,.5)}
+#toast.err{border-color:rgba(248,81,73,.55)}
+#toast .tdot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
+.t-ok{background:var(--ok)} .t-err{background:var(--danger)}
+
+/* scrollbar */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#2a3342;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#3a4a5f;background-clip:content-box;border:2px solid transparent}
+::-webkit-scrollbar-corner{background:transparent}
+
+@media (max-width:900px){
+  .sidebar{width:auto;max-height:168px;border-right:none;border-bottom:1px solid var(--border);display:flex;flex-direction:column}
+  .side-head{flex:none}
+  .main{flex-direction:column}
+  .nm-cell{width:34%}.grp-cell{width:30%}
+  .logo-cell,.rownum{display:none}
+  .act-cell{width:110px}
+  .grid2{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .content input,.content select{font-size:16px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部栏 ===== -->
+<header class="topbar">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="#161b22" stroke="#232b36"/><path d="M6 8.5 15 12l-9 3.5z" fill="#2dd4bf"/><circle cx="18" cy="7" r="1.7" fill="#2dd4bf"/></svg>
+    <div>
+      <h1 data-i18n="app.title">M3U 编辑器</h1>
+      <div class="sub" data-i18n="app.sub">IPTV 播放列表 · 上传 / 编辑 / 保存</div>
+    </div>
+  </div>
+  <span class="fname" title="保存时使用的文件名">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b949e" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>
+    <input id="fileName" value="频道列表.m3u" spellcheck="false">
+  </span>
+  <div style="flex:1"></div>
+  <select id="langSel" title="Language / 语言" style="padding:6px 8px;border-radius:6px;font-size:13px"></select>
+  <button class="btn ghost" id="btnOpen" title="从本地选择 m3u 文件">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h5l2 2h9v10H4z"/><path d="M4 7h3"/></svg><span data-i18n="btn.open">上传文件</span>
+  </button>
+  <button class="btn ghost" id="btnNew" title="新建空播放列表">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="btn.new">新建文件</span>
+  </button>
+  <button class="btn ghost" id="btnUrl" title="从 URL 链接加载 m3u 播放列表">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><span data-i18n="btn.url">从 URL 加载</span>
+  </button>
+  <span class="sep"></span>
+  <button class="btn" id="btnPickFolder" title="选择保存到本地的文件夹">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h5l2 2h9v10H4z"/></svg><span data-i18n="btn.pickFolder">选择保存文件夹</span>
+  </button>
+  <button class="btn primary" id="btnSaveFolder" title="保存到已选文件夹">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span data-i18n="btn.saveFolder">保存到文件夹</span>
+  </button>
+  <button class="btn" id="btnDownload" title="下载 .m3u 文件（浏览器默认下载）">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg><span data-i18n="btn.download">下载 .m3u</span>
+  </button>
+</header>
+
+<!-- ===== URL 加载条 ===== -->
+<div class="urlbar" id="urlBar" style="display:none">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+  <input id="urlInput" placeholder="粘贴 m3u 播放列表链接…" spellcheck="false" data-i18n-ph="url.inputPh">
+  <button class="btn primary" id="urlGo"><span data-i18n="url.load">加载</span></button>
+  <button class="btn ghost" id="urlCancel" title="关闭"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  <span class="urlHint" data-i18n="url.hint">需目标服务器允许跨域 (CORS)；失败可先下载再本地打开</span>
+</div>
+
+<!-- ===== 工具栏 ===== -->
+<div class="toolbar">
+  <div class="searchwrap">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6a737d" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+    <input id="search" placeholder="搜索频道名 / 分组 / 地址…" spellcheck="false" data-i18n-ph="search.ph">
+  </div>
+  <div class="stat">
+    <span class="pill accent" id="statCh">0 频道</span>
+    <span class="pill" id="statGrp">0 分组</span>
+    <span class="pill" id="statShown">显示 0</span>
+  </div>
+  <div style="flex:1"></div>
+  <button class="btn ghost" id="btnEpg" title="配置全局 EPG 源与播放列表名称">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M8 4v4M16 10v4"/></svg><span data-i18n="btn.epg">EPG 设置</span>
+  </button>
+  <button class="btn" id="btnAdd" title="新增频道">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="btn.add">添加频道</span>
+  </button>
+  <button class="btn ghost" id="btnUndo" title="撤销上一步（Ctrl+Z）" disabled>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 7 4 12l5 5"/><path d="M4 12h11a5 5 0 0 1 0 10h-3"/></svg><span data-i18n="btn.undo">撤销</span>
+  </button>
+</div>
+
+<!-- ===== 主区 ===== -->
+<div class="main">
+  <aside class="sidebar">
+    <div class="side-head" data-i18n="side.groups">分组</div>
+    <div id="groupList"></div>
+  </aside>
+  <section class="content">
+    <div class="tablewrap">
+      <table>
+        <colgroup>
+          <col style="width:46px"><col style="width:52px"><col style="width:26%"><col style="width:22%"><col style="width:auto"><col style="width:148px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th data-i18n="th.num">#</th><th data-i18n="th.logo">台标</th><th data-i18n="th.name">频道名称</th><th data-i18n="th.group">分组</th><th data-i18n="th.url">流地址</th><th style="text-align:right" data-i18n="th.act">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="emptyState" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 7h5l2 2h9v10H4z"/><path d="M8 15h5M8 11h2"/></svg>
+        <h3 id="emptyTitle">尚无频道</h3>
+        <p id="emptyDesc">点击上方「上传文件」选择一个 .m3u 播放列表，或点击「新建文件」从空白开始，再点「添加频道」逐条录入。</p>
+      </div>
+    </div>
+    <div class="pager" id="pager">
+      <span id="pageInfo"></span>
+      <button class="btn" id="pgPrev"><span data-i18n="pager.prev">上一页</span></button>
+      <button class="btn" id="pgNext"><span data-i18n="pager.next">下一页</span></button>
+    </div>
+  </section>
+</div>
+
+<!-- ===== 底部状态栏 ===== -->
+<footer class="statusbar">
+  <div class="sb-left">
+    <span class="dot gray" id="saveDot"></span>
+    <span id="saveLabel">已加载：—</span>
+  </div>
+  <div class="sb-right">
+    <span class="savepath" id="savePath" title="当前保存文件夹"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h5l2 2h9v10H4z"/></svg><span id="savePathText" data-i18n="status.noFolder">未选择文件夹</span></span>
+  </div>
+</footer>
+
+<!-- ===== 编辑/新增弹窗 ===== -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTitle">编辑频道</h3>
+      <button class="act" id="modalClose" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label data-i18n="f.name">显示名（名称）</label>
+        <input id="mName" placeholder="例如：News 24" spellcheck="false" data-i18n-ph="f.namePh">
+      </div>
+      <div class="field">
+        <label data-i18n="f.group">分组（group-title）</label>
+        <select id="mGroup"></select>
+        <input id="mGroupNew" placeholder="输入新分组名称" spellcheck="false" style="display:none;margin-top:6px" data-i18n-ph="f.groupNewPh">
+      </div>
+      <div class="field">
+        <label data-i18n="f.url">流地址（URL）</label>
+        <input id="mUrl" placeholder="http://… / https://… / m3u8 地址" spellcheck="false" style="font-family:var(--mono);font-size:11.5px" data-i18n-ph="f.urlPh">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label data-i18n="f.dur">时长（EXTINF）</label>
+          <input id="mDur" value="-1" spellcheck="false">
+        </div>
+        <div class="field">
+          <label data-i18n="f.tvgName">tvg-name 属性</label>
+          <input id="mTvgName" spellcheck="false">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label data-i18n="f.tvgId">tvg-id（EPG 频道 ID）</label>
+          <input id="mTvgId" placeholder="用于匹配节目单" spellcheck="false" style="font-family:var(--mono);font-size:11.5px" data-i18n-ph="f.tvgIdPh">
+        </div>
+        <div class="field">
+          <label data-i18n="f.tvgShift">tvg-shift（EPG 时间偏移，小时）</label>
+          <input id="mTvgShift" placeholder="如 1 或 -2" spellcheck="false" data-i18n-ph="f.tvgShiftPh">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label data-i18n="f.logo">tvg-logo（台标 URL）</label>
+          <input id="mLogo" placeholder="https://…/logo.png" spellcheck="false" data-i18n-ph="f.logoPh">
+        </div>
+        <div class="field">
+          <label data-i18n="f.cuid">CUID（可选）</label>
+          <input id="mCuid" placeholder="频道标识" spellcheck="false" data-i18n-ph="f.cuidPh">
+        </div>
+      </div>
+      <div class="field">
+        <label data-i18n="f.extras">其他属性（每行一条 key="value"，可选）</label>
+        <textarea id="mExtras" placeholder='例如：tvg-id="news.24"&#10;tvg-language="en"' spellcheck="false"></textarea>
+        <div class="hint" data-i18n="f.extrasHint">编辑时保留原始属性顺序；不填则沿用已有属性。</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="modalCancel"><span data-i18n="modal.cancel">取消</span></button>
+      <button class="btn primary" id="modalSave"><span data-i18n="modal.save">保存</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 分组重命名弹窗 ===== -->
+<div class="modal-mask" id="grpModalMask">
+  <div class="modal" style="width:480px">
+    <div class="modal-head">
+      <h3 data-i18n="grp.title">重命名分组</h3>
+      <button class="act" id="grpModalClose" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label data-i18n="grp.old">原分组名</label>
+        <input id="grpOld" readonly spellcheck="false" style="font-family:var(--mono);font-size:12px;color:var(--muted)">
+      </div>
+      <div class="field">
+        <label data-i18n="grp.new">新分组名</label>
+        <textarea id="grpNew" spellcheck="false" rows="2" style="resize:vertical;font-size:13px"></textarea>
+        <div class="hint" data-i18n="grp.hint">将同步更新该分组下所有频道的分组名。</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="grpCancel"><span data-i18n="modal.cancel">取消</span></button>
+      <button class="btn primary" id="grpSave"><span data-i18n="modal.save">保存</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EPG / 列表设置弹窗 ===== -->
+<div class="modal-mask" id="epgModalMask">
+  <div class="modal" style="width:540px">
+    <div class="modal-head">
+      <h3 data-i18n="epg.title">EPG / 列表设置</h3>
+      <button class="act" id="epgModalClose" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label data-i18n="epg.url">全局 EPG 源地址（写入 #EXTM3U 行 x-tvg-url）</label>
+        <input id="epgUrl" placeholder="https://…/epg.xml.gz 或 epg.xml" spellcheck="false" style="font-family:var(--mono);font-size:11.5px" data-i18n-ph="epg.urlPh">
+        <div class="hint" data-i18n="epg.urlHint">节目单（EPG）的全局来源，被播放器用于全列表的电子节目指南。</div>
+      </div>
+      <div class="field">
+        <label data-i18n="epg.name">播放列表名称（#PLAYLIST）</label>
+        <input id="epgName" placeholder="可选，如：My TV List" spellcheck="false" data-i18n-ph="epg.namePh">
+        <div class="hint" data-i18n="epg.nameHint">可选，部分播放器用它显示列表名。</div>
+      </div>
+      <div class="field">
+        <label data-i18n="epg.hintTitle">提示</label>
+        <div class="hint" style="line-height:1.7" data-i18n="epg.hint">每个频道的 EPG 匹配由该频道的 <b>tvg-id</b> 决定，时差由 <b>tvg-shift</b> 调整——这两项在「编辑频道」弹窗里设置。此处仅设置全局 EPG 数据源。</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="epgCancel"><span data-i18n="modal.cancel">取消</span></button>
+      <button class="btn primary" id="epgSave"><span data-i18n="modal.save">保存</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<input type="file" id="fileInput" accept=".m3u,.m3u8,.txt" style="display:none">
+
+<script>
+/* ================= 状态 ================= */
+const PAGE_SIZE = 100;
+const LS_KEY = 'm3ueditor.session.v1';
+const state = {
+  headerAttrs:[],          // #EXTM3U 行属性，如 x-tvg-url
+  playlistName:'',         // #PLAYLIST: 名称
+  headerExtras:[],         // 头部其它保留行
+  fileName:'频道列表.m3u',
+  channels:[],            // {id,name,url,duration,attrs:[{k,v}]}
+  dirHandle:null,
+  dirName:'',
+  group:'__all__',        // 当前选中分组
+  groupCollapsed:{},
+  search:'',
+  page:1,
+  undo:[],                // 快照栈
+  dirty:false,
+  loadedSource:'—',
+  lang:'zh'
+};
+let uid = 1;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ================= 多语言 ================= */
+const LANGS={
+zh:{'app.title':'M3U 编辑器','app.sub':'IPTV 播放列表 · 上传 / 编辑 / 保存','fileDefault':'频道列表.m3u','btn.open':'上传文件','btn.new':'新建文件','btn.pickFolder':'选择保存文件夹','btn.saveFolder':'保存到文件夹','btn.download':'下载 .m3u','btn.epg':'EPG 设置','btn.add':'添加频道','btn.undo':'撤销','btn.url':'从 URL 加载','url.load':'加载','url.inputPh':'粘贴 m3u 播放列表链接…','url.loading':'加载中…','url.hint':'需目标服务器允许跨域 (CORS)；失败可先下载再本地打开','url.needUrl':'请输入播放列表 URL','url.notM3u':'该链接不是有效的 m3u 播放列表','url.corsHint':'加载失败：{msg}。可能目标服务器不允许跨域(CORS)或网络不可达——可改用上传文件打开本地下载好的 m3u。','search.ph':'搜索频道名 / 分组 / 地址…','stat.channel':'{n} 频道','stat.group':'{n} 分组','stat.show':'显示 {n}','side.groups':'分组','side.all':'全部频道','side.ungrouped':'未分组','th.num':'#','th.logo':'台标','th.name':'频道名称','th.group':'分组','th.url':'流地址','th.act':'操作','pager.page':'第 {page} / {total} 页 · {n} 条','pager.prev':'上一页','pager.next':'下一页','empty.none.title':'尚无频道','empty.none.desc':'点击上方「上传文件」选择一个 .m3u 播放列表，或点击「新建文件」从空白开始，再点「添加频道」逐条录入。','empty.noMatch.title':'没有匹配的频道','empty.noMatch.desc':'换个关键词试试，或清空搜索框。','empty.group.title':'该分组暂无频道','empty.group.desc':'把频道名称或分组改成这个分组即可归入。','status.loaded':'已加载：{name}','status.restored':'已恢复上次编辑（{n} 频道）','status.new':'新建空白列表','status.noFolder':'未选择文件夹','status.noFs':'浏览器不支持写入文件夹，请用下载','modal.edit':'编辑频道','modal.add':'新增频道','f.name':'显示名（名称）','f.namePh':'例如：News 24','f.group':'分组（group-title）','f.groupNewPh':'输入新分组名称','f.url':'流地址（URL）','f.urlPh':'http://… / https://… / m3u8 地址','f.dur':'时长（EXTINF）','f.tvgName':'tvg-name 属性','f.tvgId':'tvg-id（EPG 频道 ID）','f.tvgIdPh':'用于匹配节目单','f.tvgShift':'tvg-shift（EPG 时间偏移，小时）','f.tvgShiftPh':'如 1 或 -2','f.logo':'tvg-logo（台标 URL）','f.logoPh':'https://…/logo.png','f.cuid':'CUID（可选）','f.cuidPh':'频道标识','f.extras':'其他属性（每行一条 key="value"，可选）','f.extrasHint':'编辑时保留原始属性顺序；不填则沿用已有属性。','modal.cancel':'取消','modal.save':'保存','group.newOption':'＋ 新建分组…','group.ungroupedOption':'— 未分组 —','grp.title':'重命名分组','grp.old':'原分组名','grp.new':'新分组名','grp.hint':'将同步更新该分组下所有频道的分组名。','grp.empty':'分组名不能为空','grp.merged':'已存在同名分组「{name}」，将合并到该分组，继续？','grp.renamed':'分组已重命名为「{name}」','grp.renameTip':'重命名分组','epg.title':'EPG / 列表设置','epg.url':'全局 EPG 源地址（写入 #EXTM3U 行 x-tvg-url）','epg.urlPh':'https://…/epg.xml.gz 或 epg.xml','epg.urlHint':'节目单（EPG）的全局来源，被播放器用于全列表的电子节目指南。','epg.name':'播放列表名称（#PLAYLIST）','epg.namePh':'可选，如：My TV List','epg.nameHint':'可选，部分播放器用它显示列表名。','epg.hintTitle':'提示','epg.hint':'每个频道的 EPG 匹配由该频道的 tvg-id 决定，时差由 tvg-shift 调整——这两项在「编辑频道」弹窗里设置。此处仅设置全局 EPG 数据源。','epg.saved':'已保存 EPG 源设置','epg.cleared':'已清除 EPG 源','toast.loaded':'已加载 {file}，共 {n} 个频道','toast.newOk':'已新建空白播放列表','toast.parseErr':'解析失败：{msg}','toast.savedChannel':'已保存频道','toast.copied':'已复制频道','toast.deleted':'已删除频道','toast.nameReq':'请填写频道名称','toast.newGroupReq':'请填写新分组名称','toast.noFs':'当前浏览器不支持选择文件夹，请用“下载 .m3u”按钮保存','toast.picked':'已选择保存文件夹：{name}','toast.pickErr':'选择文件夹失败：{msg}','toast.savedFolder':'已保存到 {dir}\\{name}','toast.saveErr':'保存失败：{msg}','toast.downloaded':'已下载 {name}','toast.undo':'已撤销','toast.restored':'已自动恢复上次编辑内容','confirm.new':'当前有 {n} 个频道，新建将清空当前内容，确定继续？'},
+en:{'app.title':'M3U Editor','app.sub':'IPTV Playlist · Upload / Edit / Save','fileDefault':'playlist.m3u','btn.open':'Upload','btn.new':'New','btn.pickFolder':'Choose Folder','btn.saveFolder':'Save to Folder','btn.download':'Download .m3u','btn.epg':'EPG Settings','btn.add':'Add Channel','btn.undo':'Undo','btn.url':'Load from URL','url.load':'Load','url.inputPh':'Paste m3u playlist link…','url.loading':'Loading…','url.hint':'The server must allow CORS; if it fails, download then open locally','url.needUrl':'Please enter a playlist URL','url.notM3u':'That link is not a valid m3u playlist','url.corsHint':'Load failed: {msg}. The server may block CORS or be unreachable — use Upload to open a locally downloaded m3u instead.','search.ph':'Search name / group / URL…','stat.channel':'{n} channels','stat.group':'{n} groups','stat.show':'Showing {n}','side.groups':'Groups','side.all':'All Channels','side.ungrouped':'Ungrouped','th.num':'#','th.logo':'Logo','th.name':'Channel Name','th.group':'Group','th.url':'Stream URL','th.act':'Actions','pager.page':'Page {page} / {total} · {n} items','pager.prev':'Prev','pager.next':'Next','empty.none.title':'No channels yet','empty.none.desc':'Click "Upload" above to open a .m3u playlist, or "New" to start blank, then use "Add Channel" to add entries.','empty.noMatch.title':'No matching channels','empty.noMatch.desc':'Try a different keyword or clear the search.','empty.group.title':'No channels in this group','empty.group.desc':'Set a channel\'s name or group to this group to include it.','status.loaded':'Loaded: {name}','status.restored':'Restored last edit ({n} channels)','status.new':'New blank playlist','status.noFolder':'No folder selected','status.noFs':'Folder writing unsupported, use Download','modal.edit':'Edit Channel','modal.add':'Add Channel','f.name':'Display Name','f.namePh':'e.g. News 24','f.group':'Group (group-title)','f.groupNewPh':'Enter new group name','f.url':'Stream URL','f.urlPh':'http://… / https://… / m3u8 URL','f.dur':'Duration (EXTINF)','f.tvgName':'tvg-name attribute','f.tvgId':'tvg-id (EPG channel ID)','f.tvgIdPh':'Used to match EPG','f.tvgShift':'tvg-shift (EPG time offset, hours)','f.tvgShiftPh':'e.g. 1 or -2','f.logo':'tvg-logo (logo URL)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (optional)','f.cuidPh':'Channel ID','f.extras':'Other attributes (one key="value" per line, optional)','f.extrasHint':'Order is preserved on edit; leave empty to keep existing.','modal.cancel':'Cancel','modal.save':'Save','group.newOption':'＋ New Group…','group.ungroupedOption':'— Ungrouped —','grp.title':'Rename Group','grp.old':'Old name','grp.new':'New name','grp.hint':'Updates the group name for all channels in this group.','grp.empty':'Group name cannot be empty','grp.merged':'A group "{name}" already exists. Merge into it?','grp.renamed':'Group renamed to "{name}"','grp.renameTip':'Rename group','epg.title':'EPG / Playlist Settings','epg.url':'Global EPG source (writes x-tvg-url on #EXTM3U)','epg.urlPh':'https://…/epg.xml.gz or epg.xml','epg.urlHint':'The global EPG source used by players for the electronic program guide.','epg.name':'Playlist name (#PLAYLIST)','epg.namePh':'Optional, e.g. My TV List','epg.nameHint':'Optional; some players show it as the list name.','epg.hintTitle':'Note','epg.hint':'Each channel matches EPG by its tvg-id, with time offset adjusted by tvg-shift — both set in the Edit Channel dialog. Here you only set the global EPG source.','epg.saved':'EPG source saved','epg.cleared':'EPG source cleared','toast.loaded':'Loaded {file} ({n} channels)','toast.newOk':'New blank playlist created','toast.parseErr':'Parse failed: {msg}','toast.savedChannel':'Channel saved','toast.copied':'Channel duplicated','toast.deleted':'Channel deleted','toast.nameReq':'Please enter a channel name','toast.newGroupReq':'Please enter a new group name','toast.noFs':'Folder picker unsupported in this browser; use "Download .m3u"','toast.picked':'Save folder selected: {name}','toast.pickErr':'Folder selection failed: {msg}','toast.savedFolder':'Saved to {dir}\\{name}','toast.saveErr':'Save failed: {msg}','toast.downloaded':'Downloaded {name}','toast.undo':'Undone','toast.restored':'Last edit restored automatically','confirm.new':'You have {n} channels. New will clear current content. Continue?'},
+id:{'app.title':'Editor M3U','app.sub':'Playlist IPTV · Unggah / Edit / Simpan','fileDefault':'daftar.m3u','btn.open':'Unggah','btn.new':'Baru','btn.pickFolder':'Pilih Folder','btn.saveFolder':'Simpan ke Folder','btn.download':'Unduh .m3u','btn.epg':'Pengaturan EPG','btn.add':'Tambah Channel','btn.undo':'Urungkan','btn.url':'Muat dari URL','url.load':'Muat','url.inputPh':'Tempel tautan playlist m3u…','url.loading':'Memuat…','url.hint':'Server harus mengizinkan CORS; jika gagal unduh dulu lalu buka lokal','url.needUrl':'Masukkan URL playlist','url.notM3u':'Tautan itu bukan playlist m3u yang valid','url.corsHint':'Gagal memuat: {msg}. Server mungkin memblokir CORS atau tak terjangkau — gunakan Unggah untuk membuka m3u lokal.','search.ph':'Cari nama / grup / URL…','stat.channel':'{n} channel','stat.group':'{n} grup','stat.show':'Menampilkan {n}','side.groups':'Grup','side.all':'Semua Channel','side.ungrouped':'Tanpa Grup','th.num':'#','th.logo':'Logo','th.name':'Nama Channel','th.group':'Grup','th.url':'URL Streaming','th.act':'Aksi','pager.page':'Hal {page} / {total} · {n} item','pager.prev':'Sebelum','pager.next':'Berikut','empty.none.title':'Belum ada channel','empty.none.desc':'Klik "Unggah" untuk membuka file .m3u, atau "Baru" untuk mulai kosong, lalu gunakan "Tambah Channel".','empty.noMatch.title':'Tidak ada channel yang cocok','empty.noMatch.desc':'Coba kata kunci lain atau kosongkan pencarian.','empty.group.title':'Tidak ada channel di grup ini','empty.group.desc':'Ubah nama atau grup channel menjadi grup ini.','status.loaded':'Dimuat: {name}','status.restored':'Memulihkan editan terakhir ({n} channel)','status.new':'Daftar kosong baru','status.noFolder':'Belum ada folder dipilih','status.noFs':'Tidak mendukung penulisan folder, gunakan Unduh','modal.edit':'Edit Channel','modal.add':'Tambah Channel','f.name':'Nama Tampilan','f.namePh':'mis. News 24','f.group':'Grup (group-title)','f.groupNewPh':'Masukkan nama grup baru','f.url':'URL Streaming','f.urlPh':'http://… / https://… / URL m3u8','f.dur':'Durasi (EXTINF)','f.tvgName':'Atribut tvg-name','f.tvgId':'tvg-id (ID channel EPG)','f.tvgIdPh':'Untuk mencocokkan EPG','f.tvgShift':'tvg-shift (offset waktu EPG, jam)','f.tvgShiftPh':'mis. 1 atau -2','f.logo':'tvg-logo (URL logo)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (opsional)','f.cuidPh':'ID channel','f.extras':'Atribut lain (satu key="value" per baris, opsional)','f.extrasHint':'Urutan dipertahankan saat edit; kosongkan untuk mempertahankan yang ada.','modal.cancel':'Batal','modal.save':'Simpan','group.newOption':'＋ Grup Baru…','group.ungroupedOption':'— Tanpa Grup —','grp.title':'Ubah Nama Grup','grp.old':'Nama lama','grp.new':'Nama baru','grp.hint':'Memperbarui nama grup untuk semua channel di grup ini.','grp.empty':'Nama grup tidak boleh kosong','grp.merged':'Grup "{name}" sudah ada. Gabung ke grup itu?','grp.renamed':'Grup diubah menjadi "{name}"','grp.renameTip':'Ubah nama grup','epg.title':'Pengaturan EPG / Daftar','epg.url':'Sumber EPG global (menulis x-tvg-url pada #EXTM3U)','epg.urlPh':'https://…/epg.xml.gz atau epg.xml','epg.urlHint':'Sumber EPG global yang dipakai pemutar untuk panduan program.','epg.name':'Nama daftar (#PLAYLIST)','epg.namePh':'Opsional, mis. My TV List','epg.nameHint':'Opsional; sebagian pemutar menampilkannya sebagai nama daftar.','epg.hintTitle':'Catatan','epg.hint':'Channel mencocokkan EPG lewat tvg-id, offset waktu lewat tvg-shift — keduanya diatur di dialog Edit Channel. Di sini hanya mengatur sumber EPG global.','epg.saved':'Sumber EPG disimpan','epg.cleared':'Sumber EPG dihapus','toast.loaded':'Dimuat {file} ({n} channel)','toast.newOk':'Daftar kosong baru dibuat','toast.parseErr':'Gagal parse: {msg}','toast.savedChannel':'Channel disimpan','toast.copied':'Channel disalin','toast.deleted':'Channel dihapus','toast.nameReq':'Mohon isi nama channel','toast.newGroupReq':'Mohon isi nama grup baru','toast.noFs':'Pemilih folder tidak didukung; gunakan "Unduh .m3u"','toast.picked':'Folder simpan dipilih: {name}','toast.pickErr':'Gagal memilih folder: {msg}','toast.savedFolder':'Disimpan ke {dir}\\{name}','toast.saveErr':'Gagal menyimpan: {msg}','toast.downloaded':'Diunduh {name}','toast.undo':'Dibatalkan','toast.restored':'Editan terakhir dipulihkan otomatis','confirm.new':'Anda punya {n} channel. Baru akan mengosongkan konten saat ini. Lanjut?'},
+ms:{'app.title':'Editor M3U','app.sub':'Senarai IPTV · Muat Naik / Edit / Simpan','fileDefault':'senarai.m3u','btn.open':'Muat Naik','btn.new':'Baharu','btn.pickFolder':'Pilih Folder','btn.saveFolder':'Simpan ke Folder','btn.download':'Muat Turun .m3u','btn.epg':'Tetapan EPG','btn.add':'Tambah Saluran','btn.undo':'Buat Asal','btn.url':'Muat dari URL','url.load':'Muat','url.inputPh':'Tampal pautan senarai m3u…','url.loading':'Memuat…','url.hint':'Pelayan mesti membenarkan CORS; jika gagal muat turun dahulu kemudian buka setempat','url.needUrl':'Sila masukkan URL senarai','url.notM3u':'Pautan itu bukan senarai m3u yang sah','url.corsHint':'Gagal memuat: {msg}. Pelayan mungkin menyekat CORS atau tidak dicapai — guna Muat Naik untuk buka m3u setempat.','search.ph':'Cari nama / kumpulan / URL…','stat.channel':'{n} saluran','stat.group':'{n} kumpulan','stat.show':'Memaparkan {n}','side.groups':'Kumpulan','side.all':'Semua Saluran','side.ungrouped':'Tanpa Kumpulan','th.num':'#','th.logo':'Logo','th.name':'Nama Saluran','th.group':'Kumpulan','th.url':'URL Strim','th.act':'Tindakan','pager.page':'Hlm {page} / {total} · {n} item','pager.prev':'Sebelum','pager.next':'Seterusnya','empty.none.title':'Belum ada saluran','empty.none.desc':'Klik "Muat Naik" untuk buka senarai .m3u, atau "Baharu" untuk mula kosong, kemudian gunakan "Tambah Saluran".','empty.noMatch.title':'Tiada saluran sepadan','empty.noMatch.desc':'Cuba kata kunci lain atau kosongkan carian.','empty.group.title':'Tiada saluran dalam kumpulan ini','empty.group.desc':'Tukar nama atau kumpulan saluran kepada kumpulan ini.','status.loaded':'Dimuat: {name}','status.restored':'Pulihkan suntingan terakhir ({n} saluran)','status.new':'Senarai kosong baharu','status.noFolder':'Tiada folder dipilih','status.noFs':'Penulisan folder tidak disokong, guna Muat Turun','modal.edit':'Edit Saluran','modal.add':'Tambah Saluran','f.name':'Nama Paparan','f.namePh':'cth. News 24','f.group':'Kumpulan (group-title)','f.groupNewPh':'Masukkan nama kumpulan baharu','f.url':'URL Strim','f.urlPh':'http://… / https://… / URL m3u8','f.dur':'Tempoh (EXTINF)','f.tvgName':'Atribut tvg-name','f.tvgId':'tvg-id (ID saluran EPG)','f.tvgIdPh':'Untuk padanan EPG','f.tvgShift':'tvg-shift (ofset masa EPG, jam)','f.tvgShiftPh':'cth. 1 atau -2','f.logo':'tvg-logo (URL logo)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (pilihan)','f.cuidPh':'ID saluran','f.extras':'Atribut lain (satu key="value" sebaris, pilihan)','f.extrasHint':'Urutan dikekalkan semasa edit; biar kosong untuk kekalkan sedia ada.','modal.cancel':'Batal','modal.save':'Simpan','group.newOption':'＋ Kumpulan Baharu…','group.ungroupedOption':'— Tanpa Kumpulan —','grp.title':'Ubah Nama Kumpulan','grp.old':'Nama lama','grp.new':'Nama baharu','grp.hint':'Mengemas kini nama kumpulan untuk semua saluran dalam kumpulan ini.','grp.empty':'Nama kumpulan tidak boleh kosong','grp.merged':'Kumpulan "{name}" sudah wujud. Gabung ke dalamnya?','grp.renamed':'Kumpulan dinamakan semula "{name}"','grp.renameTip':'Ubah nama kumpulan','epg.title':'Tetapan EPG / Senarai','epg.url':'Sumber EPG global (menulis x-tvg-url pada #EXTM3U)','epg.urlPh':'https://…/epg.xml.gz atau epg.xml','epg.urlHint':'Sumber EPG global yang digunakan pemain untuk panduan program.','epg.name':'Nama senarai (#PLAYLIST)','epg.namePh':'Pilihan, cth. My TV List','epg.nameHint':'Pilihan; sesetengah pemain memaparkannya sebagai nama senarai.','epg.hintTitle':'Nota','epg.hint':'Saluran memadankan EPG melalui tvg-id, ofset masa melalui tvg-shift — kedua-duanya di tetapan dialog Edit Saluran. Di sini hanya sumber EPG global.','epg.saved':'Sumber EPG disimpan','epg.cleared':'Sumber EPG dikosongkan','toast.loaded':'Dimuat {file} ({n} saluran)','toast.newOk':'Senarai kosong baharu dibuat','toast.parseErr':'Gagal parse: {msg}','toast.savedChannel':'Saluran disimpan','toast.copied':'Saluran disalin','toast.deleted':'Saluran dipadam','toast.nameReq':'Sila isi nama saluran','toast.newGroupReq':'Sila isi nama kumpulan baharu','toast.noFs':'Pemilih folder tidak disokong; guna "Muat Turun .m3u"','toast.picked':'Folder simpan dipilih: {name}','toast.pickErr':'Gagal pilih folder: {msg}','toast.savedFolder':'Disimpan ke {dir}\\{name}','toast.saveErr':'Gagal simpan: {msg}','toast.downloaded':'Muat turun {name}','toast.undo':'Dibuat asal','toast.restored':'Suntingan terakhir dipulihkan automatik','confirm.new':'Anda ada {n} saluran. Baharu akan kosongkan kandungan semasa. Teruskan?'},
+hi:{'app.title':'M3U संपादक','app.sub':'IPTV प्लेलिस्ट · अपलोड / संपादित / सहेजें','fileDefault':'प्लेलिस्ट.m3u','btn.open':'अपलोड करें','btn.new':'नया','btn.pickFolder':'फ़ोल्डर चुनें','btn.saveFolder':'फ़ोल्डर में सहेजें','btn.download':'.m3u डाउनलोड करें','btn.epg':'EPG सेटिंग्स','btn.add':'चैनल जोड़ें','btn.undo':'पूर्ववत करें','btn.url':'URL से लोड करें','url.load':'लोड करें','url.inputPh':'m3u प्लेलिस्ट लिंक चिपकाएँ…','url.loading':'लोड हो रहा…','url.hint':'सर्वर CORS की अनुमति देनी चाहिए; असफल होने पर डाउनलोड करके स्थानीय रूप से खोलें','url.needUrl':'कृपया प्लेलिस्ट URL दर्ज करें','url.notM3u':'वह लिंक मान्य m3u प्लेलिस्ट नहीं है','url.corsHint':'लोड विफल: {msg} । सर्वर CORS रोक सकता है या अनुपलब्ध है — अपलोड करें से स्थानीय m3u खोलें ।','search.ph':'नाम / समूह / URL खोजें…','stat.channel':'{n} चैनल','stat.group':'{n} समूह','stat.show':'{n} दिखा रहे','side.groups':'समूह','side.all':'सभी चैनल','side.ungrouped':'अवर्गीकृत','th.num':'#','th.logo':'लोगो','th.name':'चैनल नाम','th.group':'समूह','th.url':'स्ट्रीम URL','th.act':'कार्य','pager.page':'पृष्ठ {page} / {total} · {n} आइटम','pager.prev':'पिछला','pager.next':'अगला','empty.none.title':'अभी कोई चैनल नहीं','empty.none.desc':'.m3u प्लेलिस्ट खोलने के लिए ऊपर "अपलोड करें" पर क्लिक करें, या खाली शुरू करने के लिए "नया", फिर "चैनल जोड़ें" से प्रविष्टियाँ जोड़ें।','empty.noMatch.title':'कोई मिलता-जुलता चैनल नहीं','empty.noMatch.desc':'दूसरा कीवर्ड आज़माएँ या खोज साफ़ करें।','empty.group.title':'इस समूह में कोई चैनल नहीं','empty.group.desc':'किसी चैनल का नाम या समूह इस समूह में बदलें।','status.loaded':'लोड किया: {name}','status.restored':'पिछला संपादन पुनर्स्थापित ({n} चैनल)','status.new':'नई खाली प्लेलिस्ट','status.noFolder':'कोई फ़ोल्डर नहीं चुना','status.noFs':'फ़ोल्डर लेखन समर्थित नहीं, डाउनलोड का उपयोग करें','modal.edit':'चैनल संपादित करें','modal.add':'चैनल जोड़ें','f.name':'प्रदर्शन नाम','f.namePh':'जैसे News 24','f.group':'समूह (group-title)','f.groupNewPh':'नया समूह नाम दर्ज करें','f.url':'स्ट्रीम URL','f.urlPh':'http://… / https://… / m3u8 URL','f.dur':'अवधि (EXTINF)','f.tvgName':'tvg-name गुण','f.tvgId':'tvg-id (EPG चैनल ID)','f.tvgIdPh':'EPG मिलान के लिए','f.tvgShift':'tvg-shift (EPG समय ऑफ़सेट, घंटे)','f.tvgShiftPh':'जैसे 1 या -2','f.logo':'tvg-logo (लोगो URL)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (वैकल्पिक)','f.cuidPh':'चैनल ID','f.extras':'अन्य गुण (प्रति पंक्ति एक key="value", वैकल्पिक)','f.extrasHint':'संपादन पर क्रम सुरक्षित रहता है; मौजूदा रखने के लिए खाली छोड़ें।','modal.cancel':'रद्द करें','modal.save':'सहेजें','group.newOption':'＋ नया समूह…','group.ungroupedOption':'— अवर्गीकृत —','grp.title':'समूह का नाम बदलें','grp.old':'पुराना नाम','grp.new':'नया नाम','grp.hint':'इस समूह के सभी चैनलों का समूह नाम अपडेट करता है।','grp.empty':'समूह नाम खाली नहीं हो सकता','grp.merged':'"{name}" समूह पहले से मौजूद है। उसमें विलय करें?','grp.renamed':'समूह का नाम "{name}" हुआ','grp.renameTip':'समूह का नाम बदलें','epg.title':'EPG / प्लेलिस्ट सेटिंग्स','epg.url':'वैश्विक EPG स्रोत (#EXTM3U पर x-tvg-url लिखता है)','epg.urlPh':'https://…/epg.xml.gz या epg.xml','epg.urlHint':'प्लेयर द्वारा इलेक्ट्रॉनिक प्रोग्राम गाइड हेतु उपयोग किया जाने वाला वैश्विक EPG स्रोत।','epg.name':'प्लेलिस्ट नाम (#PLAYLIST)','epg.namePh':'वैकल्पिक, जैसे My TV List','epg.nameHint':'वैकल्पिक; कुछ प्लेयर इसे सूची नाम के रूप में दिखाते हैं।','epg.hintTitle':'नोट','epg.hint':'हर चैनल tvg-id से EPG मिलाता है, समय ऑफ़सेट tvg-shift से — दोनों "चैनल संपादित करें" डायलॉग में सेट होते हैं। यहाँ केवल वैश्विक EPG स्रोत सेट होता है।','epg.saved':'EPG स्रोत सहेजा','epg.cleared':'EPG स्रोत हटाया','toast.loaded':'{file} लोड किया ({n} चैनल)','toast.newOk':'नई खाली प्लेलिस्ट बनी','toast.parseErr':'पार्स विफल: {msg}','toast.savedChannel':'चैनल सहेजा','toast.copied':'चैनल डुप्लिकेट हुआ','toast.deleted':'चैनल हटाया','toast.nameReq':'कृपया चैनल नाम दर्ज करें','toast.newGroupReq':'कृपया नया समूह नाम दर्ज करें','toast.noFs':'इस ब्राउज़र में फ़ोल्डर चयन समर्थित नहीं; ".m3u डाउनलोड करें" उपयोग करें','toast.picked':'सहेजने का फ़ोल्डर चुना: {name}','toast.pickErr':'फ़ोल्डर चयन विफल: {msg}','toast.savedFolder':'{dir}\\{name} में सहेजा','toast.saveErr':'सहेजने में विफल: {msg}','toast.downloaded':'{name} डाउनलोड किया','toast.undo':'पूर्ववत','toast.restored':'पिछला संपादन स्वतः पुनर्स्थापित','confirm.new':'आपके पास {n} चैनल हैं। नया वर्तमान सामग्री साफ़ करेगा। जारी रखें?'},
+th:{'app.title':'ตัวแก้ไข M3U','app.sub':'เพลย์ลิสต์ IPTV · อัปโหลด / แก้ไข / บันทึก','fileDefault':'รายการ.m3u','btn.open':'อัปโหลด','btn.new':'ใหม่','btn.pickFolder':'เลือกโฟลเดอร์','btn.saveFolder':'บันทึกลงโฟลเดอร์','btn.download':'ดาวน์โหลด .m3u','btn.epg':'ตั้งค่า EPG','btn.add':'เพิ่มช่อง','btn.undo':'เลิกทำ','btn.url':'โหลดจาก URL','url.load':'โหลด','url.inputPh':'วางลิงก์เพลย์ลิสต์ m3u…','url.loading':'กำลังโหลด…','url.hint':'เซิร์ฟเวอร์ต้องอนุญาต CORS หากล้มเหลวให้ดาวน์โหลดแล้วเปิดในเครื่อง','url.needUrl':'กรุณาป้อน URL เพลย์ลิสต์','url.notM3u':'ลิงก์นั้นไม่ใช่เพลย์ลิสต์ m3u ที่ถูกต้อง','url.corsHint':'โหลดล้มเหลว: {msg} เซิร์ฟเวอร์อาจบล็อก CORS หรือไม่ถึง — ใช้อัปโหลดเปิดไฟล์ m3u ในเครื่อง','search.ph':'ค้นหาชื่อ / กลุ่ม / URL…','stat.channel':'{n} ช่อง','stat.group':'{n} กลุ่ม','stat.show':'แสดง {n}','side.groups':'กลุ่ม','side.all':'ทุกช่อง','side.ungrouped':'ไม่มีกลุ่ม','th.num':'#','th.logo':'โลโก้','th.name':'ชื่อช่อง','th.group':'กลุ่ม','th.url':'URL สตรีม','th.act':'การจัดการ','pager.page':'หน้า {page} / {total} · {n} รายการ','pager.prev':'ก่อนหน้า','pager.next':'ถัดไป','empty.none.title':'ยังไม่มีช่อง','empty.none.desc':'คลิก "อัปโหลด" เพื่อเปิดไฟล์ .m3u หรือ "ใหม่" เพื่อเริ่มว่างเปล่า แล้วใช้ "เพิ่มช่อง" เพิ่มรายการ','empty.noMatch.title':'ไม่พบช่องที่ตรงกัน','empty.noMatch.desc':'ลองคำค้นอื่นหรือล้างการค้นหา','empty.group.title':'ไม่มีช่องในกลุ่มนี้','empty.group.desc':'เปลี่ยนชื่อหรือกลุ่มช่องให้เป็นกลุ่มนี้','status.loaded':'โหลดแล้ว: {name}','status.restored':'กู้คืนการแก้ไขล่าสุด ({n} ช่อง)','status.new':'เพลย์ลิสต์ว่างใหม่','status.noFolder':'ยังไม่ได้เลือกโฟลเดอร์','status.noFs':'ไม่รองรับการเขียนโฟลเดอร์ ใช้ดาวน์โหลด','modal.edit':'แก้ไขช่อง','modal.add':'เพิ่มช่อง','f.name':'ชื่อที่แสดง','f.namePh':'เช่น News 24','f.group':'กลุ่ม (group-title)','f.groupNewPh':'ป้อนชื่อกลุ่มใหม่','f.url':'URL สตรีม','f.urlPh':'http://… / https://… / URL m3u8','f.dur':'ระยะเวลา (EXTINF)','f.tvgName':'คุณสมบัติ tvg-name','f.tvgId':'tvg-id (ID ช่อง EPG)','f.tvgIdPh':'ใช้จับคู่ EPG','f.tvgShift':'tvg-shift (ค่าชดเชยเวลา EPG, ชั่วโมง)','f.tvgShiftPh':'เช่น 1 หรือ -2','f.logo':'tvg-logo (URL โลโก้)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (ไม่บังคับ)','f.cuidPh':'ID ช่อง','f.extras':'คุณสมบัติอื่น (หนึ่ง key="value" ต่อบรรทัด ไม่บังคับ)','f.extrasHint':'คงลำดับเดิมเมื่อแก้ไข ปล่อยว่างเพื่อคงเดิม','modal.cancel':'ยกเลิก','modal.save':'บันทึก','group.newOption':'＋ กลุ่มใหม่…','group.ungroupedOption':'— ไม่มีกลุ่ม —','grp.title':'เปลี่ยนชื่อกลุ่ม','grp.old':'ชื่อเดิม','grp.new':'ชื่อใหม่','grp.hint':'อัปเดตชื่อกลุ่มของทุกช่องในกลุ่มนี้','grp.empty':'ชื่อกลุ่มต้องไม่ว่าง','grp.merged':'มีกลุ่ม "{name}" อยู่แล้ว รวมเข้ากลุ่มนั้น?','grp.renamed':'เปลี่ยนชื่อกลุ่มเป็น "{name}" แล้ว','grp.renameTip':'เปลี่ยนชื่อกลุ่ม','epg.title':'ตั้งค่า EPG / เพลย์ลิสต์','epg.url':'แหล่ง EPG หลัก (เขียน x-tvg-url ใน #EXTM3U)','epg.urlPh':'https://…/epg.xml.gz หรือ epg.xml','epg.urlHint':'แหล่ง EPG หลักที่เครื่องเล่นใช้สำหรับผังรายการ','epg.name':'ชื่อเพลย์ลิสต์ (#PLAYLIST)','epg.namePh':'ไม่บังคับ เช่น My TV List','epg.nameHint':'ไม่บังคับ บางเครื่องเล่นแสดงเป็นชื่อรายการ','epg.hintTitle':'หมายเหตุ','epg.hint':'แต่ละช่องจับคู่ EPG ด้วย tvg-id และชดเชยเวลาด้วย tvg-shift — ตั้งในกล่อง "แก้ไขช่อง" ที่นี่ตั้งเฉพาะแหล่ง EPG หลัก','epg.saved':'บันทึกแหล่ง EPG แล้ว','epg.cleared':'ล้างแหล่ง EPG แล้ว','toast.loaded':'โหลด {file} ({n} ช่อง)','toast.newOk':'สร้างเพลย์ลิสต์ว่างใหม่','toast.parseErr':'แยกข้อมูลล้มเหลว: {msg}','toast.savedChannel':'บันทึกช่องแล้ว','toast.copied':'คัดลอกช่องแล้ว','toast.deleted':'ลบช่องแล้ว','toast.nameReq':'กรุณาป้อนชื่อช่อง','toast.newGroupReq':'กรุณาป้อนชื่อกลุ่มใหม่','toast.noFs':'เบราว์เซอร์นี้ไม่รองรับการเลือกโฟลเดอร์ ใช้ "ดาวน์โหลด .m3u"','toast.picked':'เลือกโฟลเดอร์บันทึกแล้ว: {name}','toast.pickErr':'เลือกโฟลเดอร์ล้มเหลว: {msg}','toast.savedFolder':'บันทึกไปยัง {dir}\\{name}','toast.saveErr':'บันทึกล้มเหลว: {msg}','toast.downloaded':'ดาวน์โหลด {name}','toast.undo':'เลิกทำแล้ว','toast.restored':'กู้คืนการแก้ไขล่าสุดอัตโนมัติ','confirm.new':'คุณมี {n} ช่อง การสร้างใหม่จะล้างเนื้อหาปัจจุบัน ดำเนินการต่อ?'},
+km:{'app.title':'កម្មវិធីនិពន្ធ M3U','app.sub':'បញ្ជី IPTV · ផ្ទុកឡើង / កែសម្រួល / រក្សាទុក','fileDefault':'បញ្ជី.m3u','btn.open':'ផ្ទុកឡើង','btn.new':'ថ្មី','btn.pickFolder':'ជ្រើសរើសថត','btn.saveFolder':'រក្សាទុកក្នុងថត','btn.download':'ទាញយក .m3u','btn.epg':'ការកំណត់ EPG','btn.add':'បន្ថែមប៉ុស្តិ៍','btn.undo':'មិនធ្វើវិញ','btn.url':'ផ្ទុកព្រ URL','url.load':'ផ្ទុក','url.inputPh':'បិទ្ភាជាតតែនបញ្ជី m3u…','url.loading':'កំពែកផ្ទុក…','url.hint':'ម៉ែសីនត្រកវ្ញមានទ៉ាញ CORS បើបរែជយ បែសបរែជយ ទ៉ាយយរកប្រជ្វកប្ជាប្ជាកប្ជាបក្របែបកកំម៉ែសីន','url.needUrl':'សូមបញ្ចូល URL បញ្ជី','url.notM3u':'តែននោតម្នែសែបញ្ជី m3u ត្រៀម្វត្រវត្ត្រនៅ','url.corsHint':'ការផ្ទុកបរែជយ: {msg}១ ម៉ែសីនអាខរែជ CORS មោយោតែចស្ត្រនៅ — ប្រើបផ្ទុកចំកវែច្ចណ្លីកំម៉ែសីន១','search.ph':'ស្វែងរកឈ្មោះ / ក្រុម / URL…','stat.channel':'{n} ប៉ុស្តិ៍','stat.group':'{n} ក្រុម','stat.show':'បង្ហាញ {n}','side.groups':'ក្រុម','side.all':'ប៉ុស្តិ៍ទាំងអស់','side.ungrouped':'គ្មានក្រុម','th.num':'#','th.logo':'ស្លាក','th.name':'ឈ្មោះប៉ុស្តិ៍','th.group':'ក្រុម','th.url':'URL ស្ទ្រីម','th.act':'សកម្មភាព','pager.page':'ទំព័រ {page} / {total} · {n} ធាតុ','pager.prev':'មុន','pager.next':'បន្ទាប់','empty.none.title':'មិនទាន់មានប៉ុស្តិ៍','empty.none.desc':'ចុច "ផ្ទុកឡើង" ដើម្បីបើកឯកសារ .m3u ឬ "ថ្មី" ដើម្បីចាប់ផ្ដើមទទេ រួចប្រើ "បន្ថែមប៉ុស្តិ៍"','empty.noMatch.title':'រកមិនឃើញប៉ុស្តិ៍ដែលត្រូវ','empty.noMatch.desc':'សាកល្បងពាក្យផ្សេង ឬសម្អាតការស្វែងរក','empty.group.title':'គ្មានប៉ុស្តិ៍ក្នុងក្រុមនេះ','empty.group.desc':'ប្ដូរឈ្មោះ ឬក្រុមប៉ុស្តិ៍ឲ្យទៅជាក្រុមនេះ','status.loaded':'បានផ្ទុក: {name}','status.restored':'ស្ដារការកែចុងក្រោយ ({n} ប៉ុស្តិ៍)','status.new':'បញ្ជីទទេថ្មី','status.noFolder':'មិនទាន់ជ្រើសរើសថត','status.noFs':'មិនគាំទ្រការសរសេរថត សូមទាញយក','modal.edit':'កែសម្រួលប៉ុស្តិ៍','modal.add':'បន្ថែមប៉ុស្តិ៍','f.name':'ឈ្មោះបង្ហាញ','f.namePh':'ឧ. News 24','f.group':'ក្រុម (group-title)','f.groupNewPh':'បញ្ចូលឈ្មោះក្រុមថ្មី','f.url':'URL ស្ទ្រីម','f.urlPh':'http://… / https://… / URL m3u8','f.dur':'រយៈពេល (EXTINF)','f.tvgName':'គុណលក្ខណៈ tvg-name','f.tvgId':'tvg-id (ID ប៉ុស្តិ៍ EPG)','f.tvgIdPh':'សម្រាប់ផ្គូផ្គង EPG','f.tvgShift':'tvg-shift (អុហ្វសិតម៉ោង EPG ម៉ោង)','f.tvgShiftPh':'ឧ. 1 ឬ -2','f.logo':'tvg-logo (URL ស្លាក)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (ស្រេចចិត្ត)','f.cuidPh':'ID ប៉ុស្តិ៍','f.extras':'គុណលក្ខណៈផ្សេងទៀត (មួយ key="value" ក្នុងមួយបន្ទាត់ ស្រេចចិត្ត)','f.extrasHint':'រក្សាលំដាប់ដើមពេលកែ ទុកទទេដើម្បីរក្សាដូចដើម','modal.cancel':'បោះបង់','modal.save':'រក្សាទុក','group.newOption':'＋ ក្រុមថ្មី…','group.ungroupedOption':'— គ្មានក្រុម —','grp.title':'ប្ដូរឈ្មោះក្រុម','grp.old':'ឈ្មោះចាស់','grp.new':'ឈ្មោះថ្មី','grp.hint':'ធ្វើបច្ចុប្បន្នភាពឈ្មោះក្រុមគ្រប់ប៉ុស្តិ៍ក្នុងក្រុមនេះ','grp.empty':'ឈ្មោះក្រុមមិនអាចទទេ','grp.merged':'មានក្រុម "{name}" រួចហើយ បញ្ចូលចូលក្រុមនោះ?','grp.renamed':'ប្ដូរឈ្មោះក្រុមទៅ "{name}" ហើយ','grp.renameTip':'ប្ដូរឈ្មោះក្រុម','epg.title':'ការកំណត់ EPG / បញ្ជី','epg.url':'ប្រភព EPG សកល (សរសេរ x-tvg-url លើ #EXTM3U)','epg.urlPh':'https://…/epg.xml.gz ឬ epg.xml','epg.urlHint':'ប្រភព EPG សកលដែលអ្នកចាក់ប្រើសម្រាប់កាលវិភាគកម្មវិធី','epg.name':'ឈ្មោះបញ្ជី (#PLAYLIST)','epg.namePh':'ស្រេចចិត្ត ឧ. My TV List','epg.nameHint':'ស្រេចចិត្ត អ្នកចាក់ខ្លះបង្ហាញវាជាឈ្មោះបញ្ជី','epg.hintTitle':'ចំណាំ','epg.hint':'ប៉ុស្តិ៍នីមួយៗផ្គូផ្គង EPG ដោយ tvg-id អុហ្វសិតម៉ោងដោយ tvg-shift — កំណត់ក្នុងប្រអប់ "កែសម្រួលប៉ុស្តិ៍" ទីនេះកំណត់តែប្រភព EPG សកល','epg.saved':'រក្សាទុកប្រភព EPG ហើយ','epg.cleared':'លុបប្រភព EPG ហើយ','toast.loaded':'បានផ្ទុក {file} ({n} ប៉ុស្តិ៍)','toast.newOk':'បានបង្កើតបញ្ជីទទេថ្មី','toast.parseErr':'ការបំបែកបរាជ័យ: {msg}','toast.savedChannel':'រក្សាទុកប៉ុស្តិ៍ហើយ','toast.copied':'ចម្លងប៉ុស្តិ៍ហើយ','toast.deleted':'លុបប៉ុស្តិ៍ហើយ','toast.nameReq':'សូមបញ្ចូលឈ្មោះប៉ុស្តិ៍','toast.newGroupReq':'សូមបញ្ចូលឈ្មោះក្រុមថ្មី','toast.noFs':'កម្មវិធីរុករកនេះមិនគាំទ្រការជ្រើសថត សូមប្រើ "ទាញយក .m3u"','toast.picked':'បានជ្រើសថតរក្សាទុក: {name}','toast.pickErr':'ការជ្រើសថតបរាជ័យ: {msg}','toast.savedFolder':'រក្សាទុកទៅ {dir}\\{name}','toast.saveErr':'រក្សាទុកបរាជ័យ: {msg}','toast.downloaded':'បានទាញយក {name}','toast.undo':'បានមិនធ្វើវិញ','toast.restored':'ស្ដារការកែចុងក្រោយដោយស្វ័យប្រវត្តិ','confirm.new':'អ្នកមាន {n} ប៉ុស្តិ៍ ការថ្មីនឹងសម្អាតមាតិកាបច្ចុប្បន្ន បន្តទេ?'},
+vi:{'app.title':'Trình chỉnh sửa M3U','app.sub':'Danh sách IPTV · Tải lên / Chỉnh sửa / Lưu','fileDefault':'danhsach.m3u','btn.open':'Tải lên','btn.new':'Mới','btn.pickFolder':'Chọn thư mục','btn.saveFolder':'Lưu vào thư mục','btn.download':'Tải .m3u','btn.epg':'Cài đặt EPG','btn.add':'Thêm kênh','btn.undo':'Hoàn tác','btn.url':'Tải từ URL','url.load':'Tải','url.inputPh':'Dán liên kết danh sách m3u…','url.loading':'Đang tải…','url.hint':'Máy chủ phải cho phép CORS; nếu lỗi hãy tải về rồi mở cục bộ','url.needUrl':'Vui lòng nhập URL danh sách','url.notM3u':'Liên kết đó không phải danh sách m3u hợp lệ','url.corsHint':'Tải thất bại: {msg}. Máy chủ có thể chặn CORS hoặc không truy cập được — dùng Tải lên để mở file m3u cục bộ.','search.ph':'Tìm tên / nhóm / URL…','stat.channel':'{n} kênh','stat.group':'{n} nhóm','stat.show':'Hiển thị {n}','side.groups':'Nhóm','side.all':'Tất cả kênh','side.ungrouped':'Chưa phân nhóm','th.num':'#','th.logo':'Logo','th.name':'Tên kênh','th.group':'Nhóm','th.url':'URL phát','th.act':'Thao tác','pager.page':'Trang {page} / {total} · {n} mục','pager.prev':'Trước','pager.next':'Sau','empty.none.title':'Chưa có kênh nào','empty.none.desc':'Nhấn "Tải lên" để mở tệp .m3u, hoặc "Mới" để bắt đầu trống, rồi dùng "Thêm kênh" để thêm mục.','empty.noMatch.title':'Không có kênh phù hợp','empty.noMatch.desc':'Thử từ khóa khác hoặc xóa tìm kiếm.','empty.group.title':'Không có kênh trong nhóm này','empty.group.desc':'Đổi tên hoặc nhóm của kênh thành nhóm này.','status.loaded':'Đã tải: {name}','status.restored':'Đã khôi phục bản sửa trước ({n} kênh)','status.new':'Danh sách trống mới','status.noFolder':'Chưa chọn thư mục','status.noFs':'Không hỗ trợ ghi thư mục, dùng Tải xuống','modal.edit':'Sửa kênh','modal.add':'Thêm kênh','f.name':'Tên hiển thị','f.namePh':'vd: News 24','f.group':'Nhóm (group-title)','f.groupNewPh':'Nhập tên nhóm mới','f.url':'URL phát','f.urlPh':'http://… / https://… / URL m3u8','f.dur':'Thời lượng (EXTINF)','f.tvgName':'Thuộc tính tvg-name','f.tvgId':'tvg-id (ID kênh EPG)','f.tvgIdPh':'Dùng để khớp EPG','f.tvgShift':'tvg-shift (độ lệch giờ EPG)','f.tvgShiftPh':'vd: 1 hoặc -2','f.logo':'tvg-logo (URL logo)','f.logoPh':'https://…/logo.png','f.cuid':'CUID (tùy chọn)','f.cuidPh':'ID kênh','f.extras':'Thuộc tính khác (một key="value" mỗi dòng, tùy chọn)','f.extrasHint':'Giữ nguyên thứ tự khi sửa; để trống để giữ nguyên.','modal.cancel':'Hủy','modal.save':'Lưu','group.newOption':'＋ Nhóm mới…','group.ungroupedOption':'— Chưa phân nhóm —','grp.title':'Đổi tên nhóm','grp.old':'Tên cũ','grp.new':'Tên mới','grp.hint':'Cập nhật tên nhóm cho mọi kênh trong nhóm này.','grp.empty':'Tên nhóm không được để trống','grp.merged':'Đã có nhóm "{name}". Gộp vào đó?','grp.renamed':'Đã đổi tên nhóm thành "{name}"','grp.renameTip':'Đổi tên nhóm','epg.title':'Cài đặt EPG / Danh sách','epg.url':'Nguồn EPG toàn cục (ghi x-tvg-url vào #EXTM3U)','epg.urlPh':'https://…/epg.xml.gz hoặc epg.xml','epg.urlHint':'Nguồn EPG toàn cục mà trình phát dùng cho lịch chương trình.','epg.name':'Tên danh sách (#PLAYLIST)','epg.namePh':'Tùy chọn, vd: My TV List','epg.nameHint':'Tùy chọn; một số trình phát hiển thị nó làm tên danh sách.','epg.hintTitle':'Ghi chú','epg.hint':'Mỗi kênh khớp EPG bằng tvg-id, độ lệch giờ bằng tvg-shift — cả hai đặt trong hộp "Sửa kênh". Ở đây chỉ đặt nguồn EPG toàn cục.','epg.saved':'Đã lưu nguồn EPG','epg.cleared':'Đã xóa nguồn EPG','toast.loaded':'Đã tải {file} ({n} kênh)','toast.newOk':'Đã tạo danh sách trống mới','toast.parseErr':'Phân tích thất bại: {msg}','toast.savedChannel':'Đã lưu kênh','toast.copied':'Đã nhân bản kênh','toast.deleted':'Đã xóa kênh','toast.nameReq':'Vui lòng nhập tên kênh','toast.newGroupReq':'Vui lòng nhập tên nhóm mới','toast.noFs':'Trình duyệt không hỗ trợ chọn thư mục; dùng "Tải .m3u"','toast.picked':'Đã chọn thư mục lưu: {name}','toast.pickErr':'Chọn thư mục thất bại: {msg}','toast.savedFolder':'Đã lưu vào {dir}\\{name}','toast.saveErr':'Lưu thất bại: {msg}','toast.downloaded':'Đã tải {name}','toast.undo':'Đã hoàn tác','toast.restored':'Tự động khôi phục bản sửa trước','confirm.new':'Bạn có {n} kênh. Mới sẽ xóa nội dung hiện tại. Tiếp tục?'}
+};
+const LANGLIST=[['zh','中文'],['en','English'],['id','Indonesia'],['ms','Melayu'],['hi','हिन्दी'],['th','ไทย'],['km','ខ្មែរ'],['vi','Tiếng Việt']];
+const LANG_STORAGE='m3ueditor.lang';
+function detectLang(){
+  const saved=localStorage.getItem(LANG_STORAGE); if(saved&&LANGS[saved]) return saved;
+  const n=(navigator.language||'zh').toLowerCase();
+  const base=n.split(/[-_]/)[0];
+  if(LANGS[base]) return base;
+  if(base==='in'||base==='jw') return 'id';
+  return 'zh';
+}
+function t(key,args){
+  let s=(LANGS[state.lang]&&LANGS[state.lang][key])||LANGS.zh[key]||key;
+  if(args) for(const k in args) s=s.replace(new RegExp('\\{'+k+'\\}','g'),args[k]);
+  return s;
+}
+
+/* ================= 解析 / 序列化 ================= */
+function parseAttrs(str){
+  const attrs=[]; const re=/([A-Za-z0-9_\-]+)="([^"]*)"/g; let m;
+  while((m=re.exec(str))) attrs.push({k:m[1],v:m[2]});
+  return attrs;
+}
+function parseM3U(text){
+  const lines=text.split(/\r?\n/);
+  const headerAttrs=[]; let playlistName=''; const headerExtras=[];
+  let i=0;
+  while(i<lines.length && !/^\s*#EXTINF/i.test(lines[i])){
+    const t=lines[i].trim();
+    if(t){
+      if(/^#EXTM3U/i.test(t)){ headerAttrs.push(...parseAttrs(t.replace(/^#EXTM3U/i,'').trim())); }
+      else if(/^#PLAYLIST:/i.test(t)){ playlistName=t.replace(/^#PLAYLIST:/i,'').trim(); }
+      else { headerExtras.push(t); }
+    }
+    i++;
+  }
+  const channels=[];
+  while(i<lines.length){
+    const line=lines[i].trim();
+    if(/^#EXTINF:/i.test(line)){
+      const m=line.match(/^#EXTINF:\s*([^ \t]*)(.*)$/);
+      const duration=m?m[1]:'-1';
+      let rest=m?m[2].trim():'';
+      let name=''; let attrs=[];
+      if(rest){
+        const ci=rest.lastIndexOf(',');
+        name=rest.slice(ci+1);
+        attrs=parseAttrs(rest.slice(0,ci));
+      }
+      // 找 URL：跳过空行，直到非空且不是 #EXTINF 的行
+      i++; let url='';
+      while(i<lines.length){
+        const l=lines[i].trim();
+        if(l===''){i++;continue;}
+        if(/^#EXTINF:/i.test(l)) break;   // 缺 URL，回退
+        url=l; i++; break;
+      }
+      channels.push({id:uid++, name, url, duration, attrs});
+      continue;
+    }
+    i++;
+  }
+  return {headerAttrs, playlistName, headerExtras, channels};
+}
+function serializeHeader(){
+  const attrs=state.headerAttrs.map(a=>`${a.k}="${a.v}"`).join(' ');
+  let h='#EXTM3U'+(attrs?' '+attrs:'');
+  if(state.playlistName) h+='\n#PLAYLIST:'+state.playlistName;
+  if(state.headerExtras.length) h+='\n'+state.headerExtras.join('\n');
+  return h;
+}
+function serializeM3U(){
+  const parts=[serializeHeader()];
+  for(const c of state.channels){
+    const attrStr=c.attrs.map(a=>`${a.k}="${a.v}"`).join(' ');
+    parts.push('#EXTINF:'+(c.duration||'-1')+(attrStr?' '+attrStr:'')+','+c.name);
+    parts.push(c.url||'');
+  }
+  return parts.join('\n');
+}
+
+/* ================= 工具 ================= */
+function toast(msg,type){
+  const t=$('#toast');
+  t.className='show'+(type==='ok'?' ok':type==='err'?' err':'');
+  t.innerHTML='<span class="tdot '+(type==='ok'?'t-ok':type==='err'?'t-err':'')+'"></span>'+esc(msg);
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>t.className='',2600);
+}
+function pushUndo(){
+  state.undo.push(JSON.stringify(state.channels));
+  if(state.undo.length>60) state.undo.shift();
+  $('#btnUndo').disabled=false;
+}
+function undo(){
+  if(!state.undo.length) return;
+  state.channels=JSON.parse(state.undo.pop());
+  if(!state.undo.length) $('#btnUndo').disabled=true;
+  persist();
+  renderAll();
+  toast(t('toast.undo'));
+}
+let statusKey=null,statusArgs={};
+function setStatusLabel(key,args){ statusKey=key; statusArgs=args||{}; $('#saveLabel').textContent=t(key,statusArgs); }
+function updateSaveLabel(){ if(statusKey) $('#saveLabel').textContent=t(statusKey,statusArgs); }
+function refreshStatusBar(){
+  if(state.dirName){ $('#savePathText').textContent=state.dirName; }
+  else if(!supportsFS){ $('#savePathText').textContent=t('status.noFs'); }
+  else { $('#savePathText').textContent=t('status.noFolder'); }
+  updateSaveLabel();
+}
+function applyStaticLang(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder=t(el.getAttribute('data-i18n-ph')); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{ el.title=t(el.getAttribute('data-i18n-title')); });
+  refreshStatusBar();
+  renderAll();
+}
+function applyLang(lang){
+  state.lang=lang;
+  try{ localStorage.setItem(LANG_STORAGE,lang); }catch(e){}
+  applyStaticLang();
+}
+function buildLangSelect(){
+  const sel=$('#langSel'); sel.innerHTML='';
+  for(const [code,label] of LANGLIST){
+    const o=document.createElement('option'); o.value=code; o.textContent=label; sel.appendChild(o);
+  }
+  sel.value=state.lang;
+  sel.addEventListener('change',()=>applyLang(sel.value));
+}
+function markDirty(v){ state.dirty=v; $('#saveDot').classList.toggle('hidden',!v); }
+function groups(){
+  const map=new Map();
+  for(const c of state.channels){
+    const g=c.attrs.find(a=>a.k.toLowerCase()==='group-title')?.v||t('side.ungrouped');
+    map.set(g,(map.get(g)||0)+1);
+  }
+  return [...map.entries()];
+}
+function setAttr(c,k,v){
+  k=k.toLowerCase();
+  const idx=c.attrs.findIndex(a=>a.k.toLowerCase()===k);
+  if(idx>=0){ c.attrs[idx].v=v; }
+  else { c.attrs.push({k,v}); }
+}
+function getAttr(c,k){ return c.attrs.find(a=>a.k.toLowerCase()===k.toLowerCase())?.v||''; }
+function filtered(){
+  const q=state.search.trim().toLowerCase();
+  let list=state.channels;
+  if(state.group!=='__all__'){
+    list=list.filter(c=>(getAttr(c,'group-title')||t('side.ungrouped'))===state.group);
+  }
+  if(q){
+    list=list.filter(c=>
+      c.name.toLowerCase().includes(q)||
+      c.url.toLowerCase().includes(q)||
+      getAttr(c,'group-title').toLowerCase().includes(q)||
+      getAttr(c,'tvg-logo').toLowerCase().includes(q));
+  }
+  return list;
+}
+
+/* ================= 渲染 ================= */
+function renderGroups(){
+  const el=$('#groupList'); el.innerHTML='';
+  const total=state.channels.length;
+  const g=[['__all__',t('side.all'),total]];
+  for(const [name,cnt] of groups()) g.push([name,name,cnt]);
+  for(const [key,label,cnt] of g){
+    const d=document.createElement('div');
+    d.className='grp'+(state.group===key?' active':'')+(state.groupCollapsed[key]&&key!=='__all__'?' collapsed':'');
+    d.dataset.key=key;
+    d.innerHTML='<span class="caret">&#9662;</span><span class="gname">'+esc(label)+'</span>'+
+      (key!=='__all__'?'<button class="act g-rename" title="'+t('grp.renameTip')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>':'')+
+      '<span class="cnt">'+cnt+'</span>';
+    d.onclick=()=>{
+      if(key!=='__all__'){
+        // 点击折叠展开
+        if(state.group===key){ state.groupCollapsed[key]=!state.groupCollapsed[key]; }
+        else { state.group=key; }
+      } else { state.group='__all__'; }
+      state.page=1; renderAll();
+    };
+    const rb=d.querySelector('.g-rename');
+    if(rb){
+      rb.addEventListener('click',e=>{ e.stopPropagation(); openGroupRename(key); });
+    }
+    el.appendChild(d);
+  }
+  $('#statCh').textContent=t('stat.channel',{n:total});
+  $('#statGrp').textContent=t('stat.group',{n:g.length-1});
+}
+function renderTable(){
+  const list=filtered();
+  const total=list.length;
+  const pages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(state.page>pages) state.page=pages;
+  const slice=list.slice((state.page-1)*PAGE_SIZE, state.page*PAGE_SIZE);
+  const tb=$('#tbody'); tb.innerHTML='';
+  const start=(state.page-1)*PAGE_SIZE;
+  slice.forEach((c,idx)=>{
+    const tr=document.createElement('tr');
+    const logo=getAttr(c,'tvg-logo');
+    const abs=start+idx+1;
+    tr.innerHTML=
+      '<td class="rownum">'+abs+'</td>'+
+      '<td class="logo-cell"><img class="logo" loading="lazy" alt="" '+(logo?('src="'+esc(logo)+'"'):'')+' onerror="this.classList.add(\'err\')"></td>'+
+      '<td class="nm-cell"><input class="in-name" value="'+esc(c.name)+'" spellcheck="false"></td>'+
+      '<td class="grp-cell"><select class="in-grp">'+grpSelectHtml(getAttr(c,'group-title'))+'</select></td>'+
+      '<td class="url-cell"><input class="in-url" value="'+esc(c.url)+'" spellcheck="false"></td>'+
+      '<td class="act-cell">'+
+        '<button class="act a-up" title="上移"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg></button>'+
+        '<button class="act a-down" title="下移"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m0 0 6-6m-6 6-6-6"/></svg></button>'+
+        '<button class="act a-edit" title="编辑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>'+
+        '<button class="act a-copy" title="复制"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>'+
+        '<button class="act a-del" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg></button>'+
+      '</td>';
+    // 内联编辑
+    tr.querySelector('.in-name').addEventListener('change',e=>{
+      pushUndo(); c.name=e.target.value; setAttr(c,'tvg-name',e.target.value);
+      if(state.group!=='__all__'&&getAttr(c,'group-title')!==state.group){ renderAll(); } else { markDirty(true); persist(); }
+    });
+    tr.querySelector('.in-grp').addEventListener('change',e=>{
+      pushUndo(); const val=e.target.value; setAttr(c,'group-title',val);
+      if(state.group!=='__all__'&&val!==state.group){ renderAll(); } else { renderGroups(); renderTable(); }
+      markDirty(true); persist();
+    });
+    tr.querySelector('.in-url').addEventListener('change',e=>{ pushUndo(); c.url=e.target.value; markDirty(true); persist(); });
+    // 操作
+    tr.querySelector('.a-up').onclick=()=>move(c,-1);
+    tr.querySelector('.a-down').onclick=()=>move(c,1);
+    tr.querySelector('.a-edit').onclick=()=>openModal(c);
+    tr.querySelector('.a-copy').onclick=()=>{ pushUndo(); const nc=JSON.parse(JSON.stringify(c)); nc.id=uid++; state.channels.splice(state.channels.indexOf(c)+1,0,nc); markDirty(true); persist(); renderAll(); toast(t('toast.copied')); };
+    tr.querySelector('.a-del').onclick=()=>{ pushUndo(); state.channels=state.channels.filter(x=>x.id!==c.id); markDirty(true); persist(); renderAll(); toast(t('toast.deleted'),'ok'); };
+    tb.appendChild(tr);
+  });
+  // 空态
+  const empty=$('#emptyState');
+  if(total===0){
+    empty.style.display='block';
+    $('#tbody').style.display='none';
+    if(state.channels.length===0){ $('#emptyTitle').textContent=t('empty.none.title'); $('#emptyDesc').innerHTML=esc(t('empty.none.desc')); }
+    else if(qHas()){ $('#emptyTitle').textContent=t('empty.noMatch.title'); $('#emptyDesc').textContent=t('empty.noMatch.desc'); }
+    else { $('#emptyTitle').textContent=t('empty.group.title'); $('#emptyDesc').textContent=t('empty.group.desc'); }
+  } else {
+    empty.style.display='none'; $('#tbody').style.display='';
+  }
+  // 分页
+  $('#pageInfo').textContent=t('pager.page',{page:state.page,total:pages,n:total});
+  $('#pgPrev').disabled=state.page<=1;
+  $('#pgNext').disabled=state.page>=pages;
+  $('#statShown').textContent=t('stat.show',{n:slice.length});
+  $('#pager').style.display=pages>1?'flex':'none';
+}
+function qHas(){ return state.search.trim().length>0; }
+function move(c,dir){
+  const i=state.channels.indexOf(c); const j=i+dir;
+  if(j<0||j>=state.channels.length) return;
+  pushUndo();
+  [state.channels[i],state.channels[j]]=[state.channels[j],state.channels[i]];
+  markDirty(true); persist(); renderAll();
+}
+function renderAll(){ renderGroups(); renderTable(); }
+function renameGroup(oldName,newName){
+  newName=newName.trim();
+  if(!newName){ toast(t('grp.empty'),'err'); renderGroups(); return; }
+  if(newName===oldName){ renderGroups(); return; }
+  if(groups().some(([n])=>n===newName)){
+    if(!confirm(t('grp.merged',{name:newName}))){ renderGroups(); return; }
+  }
+  pushUndo();
+  for(const c of state.channels){
+    if((getAttr(c,'group-title')||t('side.ungrouped'))===oldName) setAttr(c,'group-title',newName);
+  }
+  if(state.group===oldName) state.group=newName;
+  delete state.groupCollapsed[oldName];
+  markDirty(true); persist(); renderAll();
+  toast(t('grp.renamed',{name:newName}),'ok');
+}
+function grpSelectHtml(current){
+  const names=groups().map(g=>g[0]);
+  let h='';
+  if(current && !names.includes(current)) h+='<option value="'+esc(current)+'" selected>'+esc(current)+'</option>';
+  for(const n of names) h+='<option value="'+esc(n)+'"'+(n===current?' selected':'')+'>'+esc(n)+'</option>';
+  return h;
+}
+
+/* ================= 弹窗 ================= */
+let editingId=null;
+function openModal(c){
+  editingId=c?c.id:null;
+  $('#modalTitle').textContent=c?t('modal.edit'):t('modal.add');
+  $('#mName').value=c?c.name:'';
+  populateGroupSelect(c?getAttr(c,'group-title'):'');
+  $('#mUrl').value=c?c.url:'';
+  $('#mDur').value=c?(c.duration||'-1'):'-1';
+  $('#mTvgName').value=c?getAttr(c,'tvg-name'):'';
+  $('#mLogo').value=c?getAttr(c,'tvg-logo'):'';
+  $('#mCuid').value=c?getAttr(c,'cuid'):'';
+  $('#mTvgId').value=c?getAttr(c,'tvg-id'):'';
+  $('#mTvgShift').value=c?getAttr(c,'tvg-shift'):'';
+  $('#mExtras').value=c?extrasToString(c.attrs):'';
+  $('#modalMask').classList.add('show');
+  setTimeout(()=>$('#mName').focus(),60);
+}
+function populateGroupSelect(current){
+  const sel=$('#mGroup'); sel.innerHTML='';
+  const names=groups().map(g=>g[0]);
+  const o0=document.createElement('option'); o0.value=''; o0.textContent=t('group.ungroupedOption'); sel.appendChild(o0);
+  if(current && !names.includes(current)){ const o=document.createElement('option'); o.value=current; o.textContent=current; sel.appendChild(o); }
+  names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
+  const nw=document.createElement('option'); nw.value='__new__'; nw.textContent=t('group.newOption'); sel.appendChild(nw);
+  sel.value=current?current:'';
+  $('#mGroupNew').value=''; $('#mGroupNew').style.display='none';
+}
+$('#mGroup').addEventListener('change',()=>{
+  const isNew=$('#mGroup').value==='__new__';
+  $('#mGroupNew').style.display=isNew?'block':'none';
+  if(isNew) $('#mGroupNew').focus();
+});
+function extrasToString(attrs){
+  const known=['tvg-id','tvg-shift','tvg-logo','tvg-name','group-title','cuid'];
+  return attrs.filter(a=>!known.includes(a.k.toLowerCase())).map(a=>a.k+'="'+a.v+'"').join('\n');
+}
+function closeModal(){ $('#modalMask').classList.remove('show'); editingId=null; }
+function saveModal(){
+  const name=$('#mName').value.trim();
+  if(!name){ toast(t('toast.nameReq'),'err'); return; }
+  const url=$('#mUrl').value.trim();
+  const dur=$('#mDur').value.trim()||'-1';
+  let group=$('#mGroup').value;
+  if(group==='__new__'){ group=$('#mGroupNew').value.trim(); if(!group){ toast(t('toast.newGroupReq'),'err'); return; } }
+  const tvgName=$('#mTvgName').value.trim()||name;
+  const logo=$('#mLogo').value.trim();
+  const cuid=$('#mCuid').value.trim();
+  const tvgId=$('#mTvgId').value.trim();
+  const tvgShift=$('#mTvgShift').value.trim();
+  const extras=[];
+  for(const line of $('#mExtras').value.split(/\r?\n/)){
+    const t=line.trim(); if(!t) continue;
+    const m=t.match(/^([A-Za-z0-9_\-]+)="([^"]*)"$/);
+    if(m) extras.push({k:m[1],v:m[2]});
+  }
+  const knownOrder=['tvg-id','tvg-shift','tvg-logo','tvg-name','group-title','cuid'];
+  const knownVals={'tvg-id':tvgId||null,'tvg-shift':tvgShift||null,'tvg-logo':logo||null,'tvg-name':tvgName,'group-title':group||null,'cuid':cuid||null};
+  if(editingId){
+    pushUndo();
+    const c=state.channels.find(x=>x.id===editingId); if(!c){ closeModal(); return; }
+    c.name=name; c.url=url; c.duration=dur;
+    // 重建属性：保留已知顺序 + 额外属性
+    c.attrs=[];
+    for(const k of knownOrder){ if(knownVals[k]) c.attrs.push({k,v:knownVals[k]}); }
+    c.attrs=c.attrs.concat(extras);
+  } else {
+    pushUndo();
+    const attrs=[];
+    for(const k of knownOrder){ if(knownVals[k]) attrs.push({k,v:knownVals[k]}); }
+    state.channels.push({id:uid++, name, url, duration:dur, attrs:attrs.concat(extras)});
+  }
+  markDirty(true); persist(); renderAll();
+  closeModal(); toast(t('toast.savedChannel'),'ok');
+}
+$('#modalSave').onclick=saveModal;
+$('#modalCancel').onclick=closeModal;
+$('#modalClose').onclick=closeModal;
+$('#modalMask').addEventListener('click',e=>{ if(e.target===$('#modalMask')) closeModal(); });
+
+/* ================= 分组重命名弹窗 ================= */
+let grpRenameOld=null;
+function openGroupRename(oldName){
+  grpRenameOld=oldName;
+  $('#grpOld').value=oldName;
+  $('#grpNew').value=oldName;
+  $('#grpModalMask').classList.add('show');
+  setTimeout(()=>{ $('#grpNew').focus(); $('#grpNew').select(); },60);
+}
+function closeGroupRename(){ $('#grpModalMask').classList.remove('show'); grpRenameOld=null; }
+$('#grpSave').onclick=()=>{
+  if(grpRenameOld==null){ closeGroupRename(); return; }
+  renameGroup(grpRenameOld, $('#grpNew').value.trim());
+  closeGroupRename();
+};
+$('#grpCancel').onclick=closeGroupRename;
+$('#grpModalClose').onclick=closeGroupRename;
+$('#grpModalMask').addEventListener('click',e=>{ if(e.target===$('#grpModalMask')) closeGroupRename(); });
+$('#grpNew').addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); $('#grpSave').click(); } });
+
+/* ================= EPG / 列表设置弹窗 ================= */
+function openEpgModal(){
+  $('#epgUrl').value=getAttrFromHeader('x-tvg-url')||getAttrFromHeader('url-tvg')||'';
+  $('#epgName').value=state.playlistName||'';
+  $('#epgModalMask').classList.add('show');
+  setTimeout(()=>$('#epgUrl').focus(),60);
+}
+function getAttrFromHeader(k){
+  return state.headerAttrs.find(a=>a.k.toLowerCase()===k.toLowerCase())?.v||'';
+}
+function setHeaderAttr(k,v){
+  k=k.toLowerCase();
+  const i=state.headerAttrs.findIndex(a=>a.k.toLowerCase()===k);
+  if(i>=0){ state.headerAttrs[i].v=v; }
+  else { state.headerAttrs.push({k,v}); }
+}
+function closeEpgModal(){ $('#epgModalMask').classList.remove('show'); }
+$('#btnEpg').onclick=openEpgModal;
+$('#epgSave').onclick=()=>{
+  const url=$('#epgUrl').value.trim();
+  const name=$('#epgName').value.trim();
+  pushUndo();
+  if(url){ setHeaderAttr('x-tvg-url',url); deleteHeaderAttr('url-tvg'); }
+  else { deleteHeaderAttr('x-tvg-url'); }
+  state.playlistName=name;
+  markDirty(true); persist();
+  closeEpgModal(); renderAll();
+  toast(url?t('epg.saved'):t('epg.cleared'),'ok');
+};
+function deleteHeaderAttr(k){
+  k=k.toLowerCase();
+  state.headerAttrs=state.headerAttrs.filter(a=>a.k.toLowerCase()!==k);
+}
+$('#epgCancel').onclick=closeEpgModal;
+$('#epgModalClose').onclick=closeEpgModal;
+$('#epgModalMask').addEventListener('click',e=>{ if(e.target===$('#epgModalMask')) closeEpgModal(); });
+$('#epgUrl').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#epgSave').click(); } });
+
+/* ================= 文件加载 / 新建 ================= */
+function applyLoaded(text,fileName){
+  const data=parseM3U(text);
+  state.channels=data.channels; state.headerAttrs=data.headerAttrs; state.playlistName=data.playlistName; state.headerExtras=data.headerExtras;
+  state.fileName=fileName; state.group='__all__'; state.search=''; state.page=1;
+  $('#fileName').value=fileName;
+  $('#search').value='';
+  markDirty(false);
+  persist();
+  renderAll();
+  setStatusLabel('status.loaded',{name:fileName});
+  toast(t('toast.loaded',{file:fileName,n:data.channels.length}),'ok');
+}
+$('#btnOpen').onclick=()=>$('#fileInput').click();
+$('#fileInput').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{ applyLoaded(String(r.result),f.name); }
+    catch(err){ toast(t('toast.parseErr',{msg:err.message}),'err'); }
+  };
+  r.readAsText(f,'utf-8');
+  e.target.value='';
+});
+
+/* ================= URL 加载（含 CORS 代理重试） ================= */
+const PROXIES = [
+  u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),
+  u=>'https://corsproxy.io/?'+encodeURIComponent(u),
+  u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)
+];
+async function fetchRemote(url){
+  // 1) 同源 PHP 代理（Hostinger 部署：proxy.php 与页面同目录，服务端直连目标）
+  if(location.protocol==='http:'||location.protocol==='https:'){
+    try{
+      const r=await fetch('proxy.php?url='+encodeURIComponent(url),{redirect:'follow'});
+      if(r.ok){
+        const t=await r.text();
+        if(/#EXTM3U/i.test(t)) return t;
+      }
+    }catch(e){ /* 无同源代理或失败，继续 */ }
+  }
+  // 2) 直连
+  try{
+    const r=await fetch(url,{redirect:'follow'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.text();
+  }catch(e){ /* 直连失败，走代理 */ }
+  // 3) 依次尝试公共 CORS 代理
+  let lastErr=null;
+  for(const p of PROXIES){
+    try{
+      const r=await fetch(p(url),{redirect:'follow'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.text();
+    }catch(err){ lastErr=err; }
+  }
+  throw lastErr||new Error('fetch failed');
+}
+function loadFromUrl(){
+  const url=$('#urlInput').value.trim();
+  if(!url){ toast(t('url.needUrl'),'err'); return; }
+  const go=$('#urlGo'); go.disabled=true; const old=go.textContent; go.textContent=t('url.loading');
+  fetchRemote(url)
+    .then(text=>{
+      if(!/#EXTM3U/i.test(text)) throw new Error(t('url.notM3u'));
+      const fname=decodeURIComponent((url.split('/').pop()||'remote').split('?')[0])||'remote.m3u';
+      applyLoaded(text, fname);
+      $('#urlInput').value=''; $('#urlBar').style.display='none';
+    })
+    .catch(err=>{
+      toast(t('url.corsHint',{msg:err.message||err}),'err');
+    })
+    .finally(()=>{ go.disabled=false; go.textContent=old; });
+}
+$('#btnUrl').onclick=()=>{ const b=$('#urlBar'); b.style.display=(b.style.display==='none')?'flex':'none'; if(b.style.display==='flex') $('#urlInput').focus(); };
+$('#urlGo').onclick=loadFromUrl;
+$('#urlCancel').onclick=()=>{ $('#urlBar').style.display='none'; };
+$('#urlInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); loadFromUrl(); } });
+$('#btnAdd').onclick=()=>openModal(null);
+$('#btnUndo').onclick=undo;
+$('#btnNew').onclick=()=>{
+  if(state.channels.length && !confirm(t('confirm.new',{n:state.channels.length}))) return;
+  state.channels=[]; state.headerAttrs=[]; state.playlistName=''; state.headerExtras=[]; state.fileName=t('fileDefault');
+  state.group='__all__'; state.search=''; state.page=1;
+  $('#fileName').value=state.fileName; $('#search').value='';
+  state.undo=[]; $('#btnUndo').disabled=true;
+  markDirty(false); persist(); renderAll();
+  setStatusLabel('status.new');
+  toast(t('toast.newOk'),'ok');
+};
+
+/* ================= 保存 ================= */
+const supportsFS = 'showDirectoryPicker' in window;
+function buildBlob(){ return new Blob([serializeM3U()], {type:'application/x-mpegurl;charset=utf-8'}); }
+function download(){
+  const blob=buildBlob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=state.fileName||t('fileDefault');
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},400);
+  markDirty(false);
+  toast(t('toast.downloaded',{name:a.download}),'ok');
+}
+$('#btnDownload').onclick=download;
+$('#btnPickFolder').onclick=async()=>{
+  if(!supportsFS){ toast(t('toast.noFs'),'err'); return; }
+  try{
+    state.dirHandle=await window.showDirectoryPicker({mode:'readwrite'});
+    state.dirName=state.dirHandle.name;
+    $('#savePathText').textContent=state.dirName;
+    $('#savePath').style.opacity=1;
+    toast(t('toast.picked',{name:state.dirName}),'ok');
+  }catch(e){
+    if(e.name!=='AbortError') toast(t('toast.pickErr',{msg:e.message}),'err');
+  }
+};
+$('#btnSaveFolder').onclick=async()=>{
+  if(!supportsFS){ toast(t('toast.noFs'),'err'); return; }
+  if(!state.dirHandle){
+    try{
+      state.dirHandle=await window.showDirectoryPicker({mode:'readwrite'});
+      state.dirName=state.dirHandle.name;
+      $('#savePathText').textContent=state.dirName;
+    }catch(e){
+      if(e.name!=='AbortError') toast(t('toast.pickErr',{msg:e.message}),'err');
+      return;
+    }
+  }
+  try{
+    const name=($('#fileName').value.trim()||t('fileDefault')).replace(/[\\/:*?"<>|]/g,'_');
+    const fh=await state.dirHandle.getFileHandle(name,{create:true});
+    const w=await fh.createWritable();
+    await w.write(serializeM3U());
+    await w.close();
+    state.fileName=name; $('#fileName').value=name;
+    markDirty(false);
+    toast(t('toast.savedFolder',{dir:state.dirName,name}),'ok');
+  }catch(e){
+    toast(t('toast.saveErr',{msg:e.message}),'err');
+  }
+};
+$('#fileName').addEventListener('change',e=>{ state.fileName=e.target.value.trim()||t('fileDefault'); });
+
+/* ================= 搜索 / 分页 ================= */
+let searchTimer;
+$('#search').addEventListener('input',e=>{
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{ state.search=e.target.value; state.page=1; renderTable(); },180);
+});
+$('#pgPrev').onclick=()=>{ if(state.page>1){state.page--; renderTable();} };
+$('#pgNext').onclick=()=>{ state.page++; renderTable(); };
+
+/* ================= 快捷键 ================= */
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+  if(e.key==='Escape' && $('#modalMask').classList.contains('show')) closeModal();
+});
+
+/* ================= 本地持久化（自动恢复） ================= */
+function persist(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify({channels:state.channels, headerAttrs:state.headerAttrs, playlistName:state.playlistName, headerExtras:state.headerExtras, fileName:state.fileName, loadedSource:state.loadedSource}));
+  }catch(e){}
+}
+function parseHeaderString(str){
+  const attrs=[]; let name=''; const extras=[];
+  for(const line of String(str).split(/\r?\n/)){
+    const t=line.trim(); if(!t) continue;
+    if(/^#EXTM3U/i.test(t)) attrs.push(...parseAttrs(t.replace(/^#EXTM3U/i,'').trim()));
+    else if(/^#PLAYLIST:/i.test(t)) name=t.replace(/^#PLAYLIST:/i,'').trim();
+    else extras.push(t);
+  }
+  return {headerAttrs:attrs, playlistName:name, headerExtras:extras};
+}
+function restore(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const d=JSON.parse(raw);
+    if(d && Array.isArray(d.channels)){
+      state.channels=d.channels;
+      if(Array.isArray(d.headerAttrs)){ state.headerAttrs=d.headerAttrs; state.playlistName=d.playlistName||''; state.headerExtras=d.headerExtras||[]; }
+      else if(typeof d.header==='string'){ const p=parseHeaderString(d.header); state.headerAttrs=p.headerAttrs; state.playlistName=p.playlistName; state.headerExtras=p.headerExtras; }
+      state.fileName=d.fileName||t('fileDefault');
+      $('#fileName').value=state.fileName;
+      state.group='__all__';
+      uid=state.channels.reduce((m,c)=>Math.max(m,c.id||0),0)+1;
+      renderAll();
+      setStatusLabel('status.restored',{n:state.channels.length});
+      toast(t('toast.restored'),'ok');
+    }
+  }catch(e){}
+}
+/* 新建文件时清空本地备份 */
+$('#btnNew').addEventListener('click',()=>{ try{ localStorage.removeItem(LS_KEY); }catch(e){} });
+
+/* ===== 初始化 ===== */
+state.lang=detectLang();
+buildLangSelect();
+if(!supportsFS){
+  $('#btnPickFolder').disabled=true;
+  $('#btnSaveFolder').disabled=true;
+}
+applyStaticLang();
+restore();
+</script>
+</body>
+</html>
