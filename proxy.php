@@ -2,12 +2,11 @@
 /**
  * proxy.php — 极简 m3u 抓取代理（供 PHP 静态主机，如 Hostinger）
  * 用法:  proxy.php?url=<URL编码的目标m3u链接>
+ *        proxy.php?head=1&url=<URL编码的流地址>   （HEAD 探测：只判断可达性，不下载正文）
  * 部署:  把本文件与 M3UEditor.html 放在同一目录即可，无需任何配置。
- * 作用:  在服务器端直连目标 m3u（服务端无 CORS 限制），再把内容返回给浏览器，
- *        从而让纯静态 HTML 也能加载任意跨域 m3u 链接。
+ * 作用:  在服务器端直连目标（服务端无 CORS 限制），再把结果返回给浏览器。
  */
 
-// 允许跨域（同源部署本不需要，保留以便从其他页面调用）
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: *');
@@ -22,36 +21,43 @@ if ($url === '') {
     echo 'missing url';
     exit;
 }
-// 仅允许 http/https，防止 SSRF 滥用
 if (!preg_match('#^https?://#i', $url)) {
     http_response_code(400);
     echo 'only http(s) allowed';
     exit;
 }
 
-const MAX_BYTES = 25 * 1024 * 1024;   // 25 MB 上限，防止拉取超大文件
+$isHead = isset($_GET['head']) && $_GET['head'] === '1';   // HEAD 探测模式
+const MAX_BYTES = 25 * 1024 * 1024;
 $ua = 'Mozilla/5.0 (compatible; m3u-proxy/1.0)';
-
-$body = false;
-$code = 0;
-$ct = '';
 
 if (function_exists('curl_init')) {
     $ch = curl_init($url);
-    curl_setopt_array($ch, [
+    $opts = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 6,
-        CURLOPT_CONNECTTIMEOUT => 15,
-        CURLOPT_TIMEOUT => 60,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => $isHead ? 20 : 60,
         CURLOPT_USERAGENT => $ua,
         CURLOPT_HTTPHEADER => ['Accept: */*'],
-    ]);
+    ];
+    if ($isHead) {
+        $opts[CURLOPT_NOBODY] = true;   // HEAD：不下载正文
+    }
+    curl_setopt_array($ch, $opts);
     $body = curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     $ct = (string)curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
     $err = curl_error($ch);
     curl_close($ch);
+
+    if ($isHead) {
+        // 2xx/3xx 都视为可达；把上游状态码原样透传给前端判断
+        http_response_code($code >= 200 && $code < 400 ? 200 : ($code >= 400 ? $code : 502));
+        header('X-Upstream-Code: ' . $code);
+        exit;
+    }
     if ($body === false || $code >= 400) {
         http_response_code($code >= 400 ? $code : 502);
         echo $body === false ? ('proxy upstream error: ' . $err) : ('upstream http ' . $code);
